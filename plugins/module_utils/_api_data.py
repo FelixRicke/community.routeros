@@ -954,14 +954,15 @@ PATHS = {
         unversioned=VersionedAPIData(
             single_value=True,
             fully_understood=True,
-            versioned_fields=[
-                ([('7.15.3', '<')], 'default-mount-point-template', KeyInfo(default='[slot]')),
-            ],
+            # versioned_fields=[
+            #    ([('7.15.3', '<')], 'default-mount-point-template', KeyInfo(default='[slot]')),
+            # ],
             fields={
                 'auto-media-interface': KeyInfo(default='bridge'),
                 'auto-media-sharing': KeyInfo(default=True),
                 'auto-smb-sharing': KeyInfo(default=True),
                 'auto-smb-user': KeyInfo(default='guest'),
+                'default-mount-point-template': KeyInfo(default='[slot]'),
             },
         ),
     ),
@@ -2023,7 +2024,7 @@ PATHS = {
             fixed_entries=True,
             fully_understood=True,
             versioned_fields=[
-                ([('7.15.3', '<')], 'bandwidth', KeyInfo(default='unlimited/unlimited')),
+                #([('7.15.3', '<')], 'bandwidth', KeyInfo(default='unlimited/unlimited')),
                 ([('7.15.3', '>=')], 'cable-settings', KeyInfo()),
                 ([('7.15.3', '>=')], 'disable-running-check', KeyInfo()),
                 ([('7.15.3', '<')], 'full-duplex', KeyInfo(default=True)),
@@ -2035,13 +2036,14 @@ PATHS = {
                 ([('7.15.3', '<')], 'power-cycle-ping-address', KeyInfo(can_disable=True)),
                 ([('7.15.3', '<')], 'power-cycle-ping-enabled', KeyInfo()),
                 ([('7.15.3', '<')], 'power-cycle-ping-timeout', KeyInfo(can_disable=True)),
-                ([('7.15.3', '>=')], 'sfp-ignore-rx-los', KeyInfo()),
+                ([('7.15.3', '>=')], 'sfp-ignore-rx-los', KeyInfo(default=False)),
             ],
             fields={
                 'advertise': KeyInfo(),
                 'arp': KeyInfo(default='enabled'),
                 'arp-timeout': KeyInfo(default='auto'),
                 'auto-negotiation': KeyInfo(default=True),
+                'bandwidth': KeyInfo(default='unlimited/unlimited'),
                 'combo-mode': KeyInfo(can_disable=True),
                 'comment': KeyInfo(can_disable=True, remove_value=''),
                 'default-name': KeyInfo(),
@@ -2115,6 +2117,7 @@ PATHS = {
         versioned=[
             ('6.43', '>=', VersionedAPIData(
                 primary_keys=('name',),
+                fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'forwarding-override': KeyInfo(),
@@ -5001,7 +5004,6 @@ PATHS = {
     ('ip', 'dhcp-client', 'option'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('name',),
-            fixed_entries=True,
             fully_understood=True,
             versioned_fields=[
                 ([('7.16', '>=')], 'comment', KeyInfo()),
@@ -8416,9 +8418,7 @@ PATHS = {
                 ([('7.19', '>=')], 'afi', KeyInfo()),
                 ([('7.20', '<')], 'cluster-id', KeyInfo()),
                 ([('7.15.3', '>=')], 'copy-from', KeyInfo()),
-                ([('7.15.3', '>=')], 'input.accept-nlri', KeyInfo()),
                 ([('7.19', '<')], 'input.accept-unknown', KeyInfo()),
-                ([('7.15.3', '<')], 'input.accpet-nlri', KeyInfo()),
                 ([('7.19', '>=')], 'input.filter-communities', KeyInfo()),
                 ([('7.19', '>=')], 'input.filter-ext-communities', KeyInfo()),
                 ([('7.19', '>=')], 'input.filter-large-communities', KeyInfo()),
@@ -8440,6 +8440,7 @@ PATHS = {
                 'input.accept-communities': KeyInfo(),
                 'input.accept-ext-communities': KeyInfo(),
                 'input.accept-large-communities': KeyInfo(),
+                'input.accept-nlri': KeyInfo(),
                 'input.affinity': KeyInfo(),
                 'input.allow-as': KeyInfo(),
                 'input.filter': KeyInfo(),
@@ -10200,9 +10201,13 @@ PATHS = {
                 'boot-os': KeyInfo(default='router-os'),
                 'boot-protocol': KeyInfo(default='bootp'),
                 'cpu-frequency': KeyInfo(),
+                'disable-pci': KeyInfo(),
                 'enable-jumper-reset': KeyInfo(default=True),
-                'enter-setup-on': KeyInfo(default='delete-key'),
+                'enter-setup-on': KeyInfo(), # default seems to differ per device.. docs say it's 'delete-key' not that it depends on model
+                'etherboot-port ': KeyInfo(),
                 'force-backup-booter': KeyInfo(default=False),
+                'gpio-function': KeyInfo(),
+                'init-delay': KeyInfo(),
                 'memory-frequency': KeyInfo(),
                 'preboot-etherboot': KeyInfo(default='disabled'),
                 'preboot-etherboot-server': KeyInfo(default='any'),
