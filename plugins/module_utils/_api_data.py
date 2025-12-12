@@ -107,8 +107,8 @@ class VersionedAPIData(object):
         self.unknown_mechanism = unknown_mechanism
         self.fully_understood = fully_understood
         self.fixed_entries = fixed_entries
-        if fixed_entries and primary_keys is None:
-            raise ValueError('fixed_entries can only be used with primary_keys')
+        if fixed_entries and not single_value and primary_keys is None:
+            raise ValueError('fixed_entries that are not singletons can only be used with primary_keys')
         if fields is None:
             raise ValueError('fields must be provided')
         self.fields = fields
@@ -228,6 +228,7 @@ def join_path(path):
 PATHS = {
     ('caps-man', 'aaa'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -272,6 +273,7 @@ PATHS = {
     ('caps-man', 'actual-interface-configuration'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'arp': KeyInfo(),
@@ -538,6 +540,7 @@ PATHS = {
 
     ('caps-man', 'manager'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -711,6 +714,7 @@ PATHS = {
 
     ('certificate', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -727,6 +731,8 @@ PATHS = {
     ('console', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.18', '>=')], 'log-script-errors', KeyInfo()),
@@ -778,6 +784,7 @@ PATHS = {
     ('container', 'config'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.20', '>=')], 'memory-high', KeyInfo()),
@@ -903,6 +910,7 @@ PATHS = {
     ('disk', 'btrfs', 'filesystem'): APIData(
         versioned=[
             ('7.18', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'default-subvolume': KeyInfo(),
@@ -952,6 +960,7 @@ PATHS = {
 
     ('disk', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             # versioned_fields=[
@@ -970,6 +979,7 @@ PATHS = {
     ('dude',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'data-directory': KeyInfo(),
@@ -1084,6 +1094,7 @@ PATHS = {
     ('dude', 'ros', 'health'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'cpu-overtemp-check': KeyInfo(),
@@ -1106,6 +1117,7 @@ PATHS = {
     ('dude', 'ros', 'interface'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -1150,6 +1162,7 @@ PATHS = {
     ('dude', 'ros', 'neighbor'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'device': KeyInfo(),
@@ -1198,6 +1211,7 @@ PATHS = {
     ('dude', 'ros', 'resource'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'device': KeyInfo(),
@@ -1242,6 +1256,7 @@ PATHS = {
     ('dude', 'ros', 'routerboard'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'device': KeyInfo(),
@@ -1281,6 +1296,7 @@ PATHS = {
     ('file', 'rsync-daemon'): APIData(
         versioned=[
             ('7.16', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'enabled': KeyInfo(),
@@ -1315,6 +1331,7 @@ PATHS = {
     ('interface',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -1803,6 +1820,7 @@ PATHS = {
     ('interface', 'bridge', 'port-controller'): APIData(
         versioned=[
             ('7.18', '<', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -1831,6 +1849,7 @@ PATHS = {
     ('interface', 'bridge', 'port-controller', 'port'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'disabled': KeyInfo(),
@@ -1845,6 +1864,7 @@ PATHS = {
     ('interface', 'bridge', 'port-extender'): APIData(
         versioned=[
             ('7.18', '<', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -1859,6 +1879,7 @@ PATHS = {
 
     ('interface', 'bridge', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -1891,6 +1912,7 @@ PATHS = {
 
     ('interface', 'detect-internet'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -2304,6 +2326,7 @@ PATHS = {
 
     ('interface', 'l2tp-server', 'server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -2367,6 +2390,7 @@ PATHS = {
     ('interface', 'lte'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.16', '>=')], 'sms-protocol', KeyInfo()),
@@ -2421,6 +2445,8 @@ PATHS = {
     ('interface', 'lte', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.17', '>=')], 'esim-channel', KeyInfo()),
@@ -2832,6 +2858,7 @@ PATHS = {
 
     ('interface', 'pptp-server', 'server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -2899,6 +2926,7 @@ PATHS = {
 
     ('interface', 'sstp-server', 'server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -3287,6 +3315,7 @@ PATHS = {
     ('interface', 'wifi', 'cap'): APIData(
         versioned=[
             ('7.13', '>=', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -3307,6 +3336,7 @@ PATHS = {
     ('interface', 'wifi', 'capsman'): APIData(
         versioned=[
             ('7.13', '>=', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -3663,6 +3693,8 @@ PATHS = {
     ('interface', 'wifi', 'radio', 'settings'): APIData(
         versioned=[
             ('7.17', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'external-antenna': KeyInfo(),
@@ -3765,6 +3797,7 @@ PATHS = {
     ('interface', 'wifi', 'steering', 'neighbor-group'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -4273,6 +4306,7 @@ PATHS = {
 
     ('interface', 'wireless', 'align'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -4291,6 +4325,7 @@ PATHS = {
 
     ('interface', 'wireless', 'cap'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -4414,6 +4449,7 @@ PATHS = {
     ('interface', 'wireless', 'manual-tx-power-table'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -4427,6 +4463,7 @@ PATHS = {
     ('interface', 'wireless', 'nstreme'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -4530,6 +4567,7 @@ PATHS = {
 
     ('interface', 'wireless', 'sniffer'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -4549,6 +4587,7 @@ PATHS = {
 
     ('interface', 'wireless', 'snooper'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -4583,6 +4622,7 @@ PATHS = {
     ('iot', 'bluetooth'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'antenna': KeyInfo(),
@@ -4597,6 +4637,7 @@ PATHS = {
     ('iot', 'bluetooth', 'advertisers'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'ad-structures': KeyInfo(),
@@ -4628,6 +4669,7 @@ PATHS = {
     ('iot', 'bluetooth', 'peripheral-devices'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'address': KeyInfo(),
@@ -4644,6 +4686,7 @@ PATHS = {
     ('iot', 'bluetooth', 'scanners'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'disabled': KeyInfo(),
@@ -4678,6 +4721,7 @@ PATHS = {
     ('iot', 'lora'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.16', '>=')], 'alt', KeyInfo()),
@@ -4708,6 +4752,7 @@ PATHS = {
     ('iot', 'lora', 'channels'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'bandwidth': KeyInfo(),
@@ -4759,6 +4804,7 @@ PATHS = {
     ('iot', 'lora', 'radios'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'center-freq': KeyInfo(),
@@ -4799,6 +4845,8 @@ PATHS = {
     ('iot', 'lora', 'traffic', 'options'): APIData(
         versioned=[
             ('7.17', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.19', '>=')], 'pckt-limit', KeyInfo()),
@@ -4812,6 +4860,7 @@ PATHS = {
 
     ('iot', 'modbus'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -4951,6 +5000,7 @@ PATHS = {
 
     ('ip', 'cloud'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -4966,6 +5016,7 @@ PATHS = {
 
     ('ip', 'cloud', 'advanced'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -5095,6 +5146,7 @@ PATHS = {
 
     ('ip', 'dhcp-server', 'config'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -5223,6 +5275,7 @@ PATHS = {
 
     ('ip', 'dns'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -5411,6 +5464,7 @@ PATHS = {
 
     ('ip', 'firewall', 'connection', 'tracking'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -5760,6 +5814,7 @@ PATHS = {
     ('ip', 'firewall', 'service-port'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('name',),
+            fixed_entries=True,
             fully_understood=True,
             versioned_fields=[
                 ([('7.15.3', '>=')], 'numbers', KeyInfo()),
@@ -6033,6 +6088,7 @@ PATHS = {
     ('ip', 'ipsec', 'key'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'name': KeyInfo(),
@@ -6046,6 +6102,8 @@ PATHS = {
     ('ip', 'ipsec', 'key', 'rsa'): APIData(
         versioned=[
             ('7.20', '>=', VersionedAPIData(
+                primary_keys=('numbers',),
+                fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'name': KeyInfo(),
@@ -6189,6 +6247,7 @@ PATHS = {
 
     ('ip', 'ipsec', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -6262,6 +6321,8 @@ PATHS = {
     ('ip', 'media', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'thumbnails': KeyInfo(),
@@ -6273,6 +6334,8 @@ PATHS = {
     ('ip', 'nat-pmp'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'enabled': KeyInfo(),
@@ -6298,6 +6361,7 @@ PATHS = {
 
     ('ip', 'neighbor', 'discovery-settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -6350,6 +6414,7 @@ PATHS = {
     ('ip', 'pool', 'used'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'address': KeyInfo(),
@@ -6364,6 +6429,7 @@ PATHS = {
 
     ('ip', 'proxy'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -6447,6 +6513,7 @@ PATHS = {
     ('ip', 'proxy', 'connections'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -6563,6 +6630,7 @@ PATHS = {
 
     ('ip', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -6590,6 +6658,7 @@ PATHS = {
 
     ('ip', 'smb'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -6644,6 +6713,7 @@ PATHS = {
 
     ('ip', 'socks'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -6682,6 +6752,7 @@ PATHS = {
     ('ip', 'socks', 'connections'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'dst-address': KeyInfo(),
@@ -6733,6 +6804,7 @@ PATHS = {
 
     ('ip', 'ssh'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -6773,6 +6845,7 @@ PATHS = {
 
     ('ip', 'tftp', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -6783,6 +6856,7 @@ PATHS = {
 
     ('ip', 'traffic-flow'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -6800,6 +6874,7 @@ PATHS = {
 
     ('ip', 'traffic-flow', 'ipfix'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -6864,6 +6939,7 @@ PATHS = {
 
     ('ip', 'upnp'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -7441,6 +7517,7 @@ PATHS = {
 
     ('ipv6', 'nd', 'prefix', 'default'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -7532,6 +7609,7 @@ PATHS = {
 
     ('ipv6', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -7557,6 +7635,7 @@ PATHS = {
     ('lora',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.16', '>=')], 'alt', KeyInfo()),
@@ -7587,6 +7666,7 @@ PATHS = {
     ('lora', 'channels'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'bandwidth': KeyInfo(),
@@ -7638,6 +7718,7 @@ PATHS = {
     ('lora', 'radios'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'center-freq': KeyInfo(),
@@ -7678,6 +7759,7 @@ PATHS = {
     ('lora', 'traffic', 'options'): APIData(
         versioned=[
             ('7.17', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.19', '>=')], 'pckt-limit', KeyInfo()),
@@ -7882,6 +7964,8 @@ PATHS = {
     ('mpls', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'allow-fast-path': KeyInfo(),
@@ -8013,6 +8097,7 @@ PATHS = {
     ('port',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'baud-rate': KeyInfo(),
@@ -8064,6 +8149,7 @@ PATHS = {
 
     ('ppp', 'aaa'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -8337,6 +8423,7 @@ PATHS = {
 
     ('radius', 'incoming'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -8949,6 +9036,7 @@ PATHS = {
 
     ('routing', 'igmp-proxy'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -9031,6 +9119,7 @@ PATHS = {
     ('routing', 'isis', 'interface'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'hello-interval': KeyInfo(),
@@ -9108,6 +9197,7 @@ PATHS = {
     ('routing', 'isis', 'lsp'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'age': KeyInfo(),
@@ -9126,6 +9216,7 @@ PATHS = {
     ('routing', 'isis', 'neighbor'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'instance': KeyInfo(),
@@ -9264,6 +9355,7 @@ PATHS = {
     ('routing', 'ospf', 'neighbor'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -9374,6 +9466,7 @@ PATHS = {
     ('routing', 'pimsm', 'igmp-interface-template'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'instance': KeyInfo(),
@@ -9577,6 +9670,7 @@ PATHS = {
     ('routing', 'route'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -9590,6 +9684,7 @@ PATHS = {
     ('routing', 'route', 'rule'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'action': KeyInfo(),
@@ -9654,6 +9749,8 @@ PATHS = {
     ('routing', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.19', '>=')], 'connected-in-chain', KeyInfo()),
@@ -9686,6 +9783,8 @@ PATHS = {
     ('rsync-daemon',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'enabled': KeyInfo(),
@@ -9697,6 +9796,7 @@ PATHS = {
 
     ('snmp',): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -9760,6 +9860,7 @@ PATHS = {
 
     ('system', 'clock'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -9776,6 +9877,7 @@ PATHS = {
 
     ('system', 'clock', 'manual'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -9805,6 +9907,8 @@ PATHS = {
     ('system', 'console', 'screen'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'blank-interval': KeyInfo(),
@@ -9817,6 +9921,7 @@ PATHS = {
     ('system', 'gps'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'channel': KeyInfo(),
@@ -9834,6 +9939,8 @@ PATHS = {
     ('system', 'hardware'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'multi-cpu': KeyInfo(),
@@ -9843,20 +9950,22 @@ PATHS = {
         ],
     ),
 
-    ('system', 'health'): APIData(
-        versioned=[
-            ('7.15.3', '>=', VersionedAPIData(
-                fully_understood=True,
-                fields={
-                    'state-after-reboot': KeyInfo(),
-                },
-            )),
-        ],
-    ),
+    # ('system', 'health'): APIData(
+    #     versioned=[
+    #         ('7.15.3', '>=', VersionedAPIData(
+    #             fixed_entries=True,
+    #             fully_understood=True,
+    #             fields={
+    #                 'state-after-reboot': KeyInfo(),
+    #             },
+    #         )),
+    #     ],
+    # ),
 
     ('system', 'health', 'settings'): APIData(
         versioned=[
             ('7.14', '<', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -9874,6 +9983,7 @@ PATHS = {
                 },
             )),
             ('7.14', '>=', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -9895,6 +10005,7 @@ PATHS = {
 
     ('system', 'identity'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -9921,6 +10032,7 @@ PATHS = {
 
     ('system', 'leds', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -9982,6 +10094,7 @@ PATHS = {
 
     ('system', 'note'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -9996,6 +10109,7 @@ PATHS = {
 
     ('system', 'ntp', 'client'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10047,6 +10161,7 @@ PATHS = {
 
     ('system', 'ntp', 'server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10066,6 +10181,7 @@ PATHS = {
     ('system', 'package', 'local-update'): APIData(
         versioned=[
             ('7.17', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'download': KeyInfo(),
@@ -10078,6 +10194,8 @@ PATHS = {
     ('system', 'package', 'local-update', 'mirror'): APIData(
         versioned=[
             ('7.17', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'check-interval': KeyInfo(),
@@ -10106,6 +10224,7 @@ PATHS = {
 
     ('system', 'package', 'update'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10122,6 +10241,8 @@ PATHS = {
     ('system', 'resource', 'hardware', 'usb-settings'): APIData(
         versioned=[
             ('7.20', '>=', VersionedAPIData(
+                fixed_entries=True,
+                single_value=True,
                 fully_understood=True,
                 fields={
                     'authorization': KeyInfo(),
@@ -10132,6 +10253,7 @@ PATHS = {
 
     ('system', 'resource', 'irq'): APIData(
         unversioned=VersionedAPIData(
+            #fixed_entries=True,
             has_identifier=True,
             versioned_fields=[
                 ([('7.15.3', '>=')], 'numbers', KeyInfo()),
@@ -10145,6 +10267,7 @@ PATHS = {
     ('system', 'resource', 'irq', 'rps'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('name',),
+            fixed_entries=True,
             fully_understood=True,
             versioned_fields=[
                 ([('7.15.3', '>=')], 'numbers', KeyInfo()),
@@ -10159,6 +10282,7 @@ PATHS = {
     ('system', 'resource', 'usb'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'device': KeyInfo(),
@@ -10180,6 +10304,7 @@ PATHS = {
     ('system', 'resource', 'usb', 'settings'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'authorization': KeyInfo(),
@@ -10191,6 +10316,7 @@ PATHS = {
 
     ('system', 'routerboard', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10260,6 +10386,7 @@ PATHS = {
     ('system', 'script', 'environment'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -10273,6 +10400,7 @@ PATHS = {
     ('system', 'script', 'job'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'comment': KeyInfo(),
@@ -10287,6 +10415,7 @@ PATHS = {
     ('system', 'upgrade'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'download': KeyInfo(),
@@ -10298,6 +10427,7 @@ PATHS = {
 
     ('system', 'upgrade', 'mirror'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10348,6 +10478,7 @@ PATHS = {
 
     ('system', 'watchdog'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10388,6 +10519,7 @@ PATHS = {
 
     ('tool', 'bandwidth-server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10431,6 +10563,7 @@ PATHS = {
     ('tool', 'e-mail'): APIData(
         versioned=[
             ('7.12', '>=', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 versioned_fields=[
@@ -10448,6 +10581,7 @@ PATHS = {
                 },
             )),
             ('7.12', '<', VersionedAPIData(
+                fixed_entries=True,
                 single_value=True,
                 fully_understood=True,
                 fields={
@@ -10466,6 +10600,7 @@ PATHS = {
 
     ('tool', 'graphing'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10529,6 +10664,7 @@ PATHS = {
 
     ('tool', 'mac-server'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10539,6 +10675,7 @@ PATHS = {
 
     ('tool', 'mac-server', 'mac-winbox'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10549,6 +10686,7 @@ PATHS = {
 
     ('tool', 'mac-server', 'ping'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10560,6 +10698,7 @@ PATHS = {
     ('tool', 'mac-server', 'sessions'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'interface': KeyInfo(),
@@ -10622,6 +10761,7 @@ PATHS = {
 
     ('tool', 'romon'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10650,6 +10790,7 @@ PATHS = {
 
     ('tool', 'sms'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10671,6 +10812,7 @@ PATHS = {
 
     ('tool', 'sniffer'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             versioned_fields=[
@@ -10713,6 +10855,7 @@ PATHS = {
 
     ('tool', 'traffic-generator'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10862,6 +11005,7 @@ PATHS = {
     ('tr069-client',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'acs-url': KeyInfo(),
@@ -10905,6 +11049,7 @@ PATHS = {
 
     ('user', 'aaa'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10946,6 +11091,7 @@ PATHS = {
 
     ('user', 'settings'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
             fields={
@@ -10972,6 +11118,7 @@ PATHS = {
     ('user-manager',): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'accounting-port': KeyInfo(),
@@ -10988,6 +11135,7 @@ PATHS = {
     ('user-manager', 'advanced'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'paypal-allow': KeyInfo(),
@@ -11022,6 +11170,7 @@ PATHS = {
     ('user-manager', 'database'): APIData(
         versioned=[
             ('7.15.3', '>=', VersionedAPIData(
+                #fixed_entries=True,
                 fully_understood=True,
                 fields={
                     'db-path': KeyInfo(),
