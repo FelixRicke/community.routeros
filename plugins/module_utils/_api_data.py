@@ -275,6 +275,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'arp': KeyInfo(),
                     'arp-timeout': KeyInfo(),
@@ -732,7 +733,8 @@ PATHS = {
         versioned=[
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
-                #fixed_entries=True,
+                fixed_entries=True,
+                single_value=True,
                 versioned_fields=[
                     ([('7.18', '>=')], 'log-script-errors', KeyInfo()),
                     ([('7.20', '>=')], 'tab-width', KeyInfo()),
@@ -785,6 +787,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 versioned_fields=[
                     ([('7.20', '>=')], 'memory-high', KeyInfo()),
                 ],
@@ -911,6 +914,7 @@ PATHS = {
             ('7.18', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'default-subvolume': KeyInfo(),
                     'label': KeyInfo(),
@@ -979,6 +983,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'data-directory': KeyInfo(),
                     'enabled': KeyInfo(),
@@ -1094,6 +1099,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'cpu-overtemp-check': KeyInfo(),
                     'cpu-overtemp-startup-delay': KeyInfo(),
@@ -1117,6 +1123,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'comment': KeyInfo(),
                     'device': KeyInfo(),
@@ -1162,6 +1169,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'device': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -1211,6 +1219,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'device': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -1256,6 +1265,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'device': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -1296,6 +1306,7 @@ PATHS = {
             ('7.16', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'enabled': KeyInfo(),
                 },
@@ -1330,7 +1341,8 @@ PATHS = {
         versioned=[
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
-                #fixed_entries=True,
+                fixed_entries=True,
+                primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'disabled': KeyInfo(),
@@ -1849,6 +1861,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 fields={
                     'disabled': KeyInfo(),
                     'name': KeyInfo(),
@@ -2485,6 +2498,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers'),
                 versioned_fields=[
                     ([('7.16', '>=')], 'sms-protocol', KeyInfo()),
                 ],
@@ -2540,6 +2554,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 versioned_fields=[
                     ([('7.17', '>=')], 'esim-channel', KeyInfo()),
                     ([('7.19', '>=')], 'link-recovery-timer', KeyInfo()),
@@ -3891,6 +3906,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -4543,6 +4559,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'manual-tx-powers': KeyInfo(),
@@ -4557,6 +4574,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'disable-csma': KeyInfo(),
@@ -4716,6 +4734,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'antenna': KeyInfo(),
                     'name': KeyInfo(),
@@ -4731,6 +4750,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'ad-structures': KeyInfo(),
                     'channel-map': KeyInfo(),
@@ -4763,6 +4783,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'address': KeyInfo(),
                     'address-type': KeyInfo(),
@@ -4780,6 +4801,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'disabled': KeyInfo(),
                     'filter-duplicates': KeyInfo(),
@@ -4815,6 +4837,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 versioned_fields=[
                     ([('7.16', '>=')], 'alt', KeyInfo()),
                     ([('7.16', '>=')], 'lat', KeyInfo()),
@@ -4846,6 +4869,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'bandwidth': KeyInfo(),
                     'datarate': KeyInfo(),
@@ -4898,6 +4922,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'center-freq': KeyInfo(),
                     'disabled': KeyInfo(),
@@ -5140,6 +5165,7 @@ PATHS = {
             ('7.18', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'prefer-relay-code': KeyInfo(),
                 },
@@ -6253,6 +6279,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'name': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -6580,6 +6607,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'address': KeyInfo(),
                     'info': KeyInfo(),
@@ -6679,6 +6707,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -6918,6 +6947,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'dst-address': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -7801,6 +7831,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'backlight-timeout': KeyInfo(),
                     'color-scheme': KeyInfo(),
@@ -7848,6 +7879,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'hide-pin-number': KeyInfo(),
                     'pin-number': KeyInfo(),
@@ -7861,6 +7893,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'disabled': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -7875,6 +7908,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 versioned_fields=[
                     ([('7.16', '>=')], 'alt', KeyInfo()),
                     ([('7.16', '>=')], 'lat', KeyInfo()),
@@ -7906,6 +7940,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'bandwidth': KeyInfo(),
                     'datarate': KeyInfo(),
@@ -7958,6 +7993,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'center-freq': KeyInfo(),
                     'disabled': KeyInfo(),
@@ -7999,6 +8035,7 @@ PATHS = {
             ('7.17', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 versioned_fields=[
                     ([('7.19', '>=')], 'pckt-limit', KeyInfo()),
                 ],
@@ -8340,6 +8377,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'fallback-to': KeyInfo(),
@@ -8355,6 +8393,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'baud-rate': KeyInfo(),
                     'data-bits': KeyInfo(),
@@ -9377,6 +9416,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'hello-interval': KeyInfo(),
                     'instance': KeyInfo(),
@@ -9455,6 +9495,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'age': KeyInfo(),
                     'body': KeyInfo(),
@@ -9474,6 +9515,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'instance': KeyInfo(),
                     'interface': KeyInfo(),
@@ -9613,6 +9655,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -9724,6 +9767,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'instance': KeyInfo(),
                     'interfaces': KeyInfo(),
@@ -9928,6 +9972,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'disabled': KeyInfo(),
@@ -9942,6 +9987,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'action': KeyInfo(),
                     'comment': KeyInfo(),
@@ -10180,6 +10226,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'channel': KeyInfo(),
                     'coordinate-format': KeyInfo(),
@@ -10212,6 +10259,7 @@ PATHS = {
             ('7.15.3', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'state-after-reboot': KeyInfo(),
                 },
@@ -10441,6 +10489,7 @@ PATHS = {
             ('7.17', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'download': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -10513,6 +10562,7 @@ PATHS = {
         unversioned=VersionedAPIData(
             has_identifier=True,
             #fixed_entries=True,
+            #primary_keys=('numbers',),
             versioned_fields=[
                 ([('7.15', '>=')], 'numbers', KeyInfo()),
             ],
@@ -10542,6 +10592,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'device': KeyInfo(),
                     'device-id': KeyInfo(),
@@ -10564,6 +10615,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'authorization': KeyInfo(),
                 },
@@ -10577,6 +10629,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'enabled': KeyInfo(),
                     'hold-time': KeyInfo(),
@@ -10591,6 +10644,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'enabled': KeyInfo(),
                     'hold-time': KeyInfo(),
@@ -10640,6 +10694,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'type': KeyInfo(),
                     'usb-mode': KeyInfo(),
@@ -10653,6 +10708,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'enabled': KeyInfo(),
                     'hold-time': KeyInfo(),
@@ -10705,6 +10761,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -10719,6 +10776,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'comment': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -10734,6 +10792,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'download': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -11020,6 +11079,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #primary_keys=('numbers',),
                 fields={
                     'interface': KeyInfo(),
                     'numbers': KeyInfo(),
@@ -11440,6 +11500,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'accounting-port': KeyInfo(),
                     'authentication-port': KeyInfo(),
@@ -11457,6 +11518,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'paypal-allow': KeyInfo(),
                     'paypal-currency': KeyInfo(),
@@ -11492,6 +11554,7 @@ PATHS = {
             ('7.15', '>=', VersionedAPIData(
                 fully_understood=True,
                 #fixed_entries=True,
+                #single_value=True,
                 fields={
                     'db-path': KeyInfo(),
                 },
