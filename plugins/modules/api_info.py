@@ -119,8 +119,11 @@ options:
       - interface ethernet
       - interface ethernet poe
       - interface ethernet switch
+      - interface ethernet switch host
       - interface ethernet switch port
       - interface ethernet switch port-isolation
+      - interface ethernet switch rule
+      - interface ethernet switch vlan
       - interface gre
       - interface gre6
       - interface ipip
@@ -225,6 +228,10 @@ options:
       - ip arp
       - ip cloud
       - ip cloud advanced
+      - ip cloud back-to-home-file
+      - ip cloud back-to-home-file settings
+      - ip cloud back-to-home-user
+      - ip cloud back-to-home-users
       - ip dhcp-client
       - ip dhcp-client option
       - ip dhcp-relay
@@ -328,6 +335,11 @@ options:
       - ipv6 pool
       - ipv6 route
       - ipv6 settings
+      - lcd
+      - lcd interface
+      - lcd interface pages
+      - lcd pin
+      - lcd screen
       - lora
       - lora channels
       - lora joineui
@@ -351,6 +363,7 @@ options:
       - mpls traffic-eng tunnel
       - openflow
       - openflow port
+      - partitions
       - port
       - port firmware
       - port remote-access
@@ -451,7 +464,11 @@ options:
       - system resource irq rps
       - system resource usb
       - system resource usb settings
+      - system routerboard mode-button
+      - system routerboard reset-button
       - system routerboard settings
+      - system routerboard usb
+      - system routerboard wps-button
       - system scheduler
       - system script
       - system script environment
@@ -504,6 +521,10 @@ options:
       - user-manager user
       - user-manager user group
       - user-manager user-profile
+      - zerotier
+      - zerotier controller
+      - zerotier controller member
+      - zerotier interface
     # END PATH LIST
   unfiltered:
     description:
