@@ -41,8 +41,12 @@ def test_api_data_errors():
     assert exc.value.args[0] == 'unknown_mechanism and fully_understood cannot be combined'
 
     with pytest.raises(ValueError) as exc:
-        VersionedAPIData(unknown_mechanism=True, fixed_entries=True)
-    assert exc.value.args[0] == 'fixed_entries can only be used with primary_keys'
+        VersionedAPIData(unknown_mechanism=True, single_value=True, primary_keys=('name', ))
+    assert exc.value.args[0] == 'single_value and primary_keys are mutually exclusive'
+
+    with pytest.raises(ValueError) as exc:
+        VersionedAPIData(unknown_mechanism=True, fixed_entries=True, single_value=False)
+    assert exc.value.args[0] == 'fixed_entries that are not singletons can only be used with primary_keys'
 
     with pytest.raises(ValueError) as exc:
         VersionedAPIData(primary_keys=['foo'], fields={})
