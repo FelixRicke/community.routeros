@@ -120,8 +120,19 @@ options:
       - interface ethernet poe
       - interface ethernet switch
       - interface ethernet switch host
+      - interface ethernet switch l3hw-settings
+      - interface ethernet switch l3hw-settings advanced
       - interface ethernet switch port
       - interface ethernet switch port-isolation
+      - interface ethernet switch qos map
+      - interface ethernet switch qos map ip
+      - interface ethernet switch qos map vlan
+      - interface ethernet switch qos port
+      - interface ethernet switch qos priority-flow-control
+      - interface ethernet switch qos profile
+      - interface ethernet switch qos settings
+      - interface ethernet switch qos tx-manager
+      - interface ethernet switch qos tx-manager queue
       - interface ethernet switch rule
       - interface ethernet switch vlan
       - interface gre
@@ -473,6 +484,7 @@ options:
       - system script
       - system script environment
       - system script job
+      - system swos
       - system upgrade
       - system upgrade mirror
       - system upgrade upgrade-package-source
