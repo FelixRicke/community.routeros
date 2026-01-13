@@ -713,7 +713,6 @@ PATHS = {
         ],
     ),
 
-    #379
     ('certificate', 'settings'): APIData(
         unversioned=VersionedAPIData(
             fixed_entries=True,
@@ -1410,7 +1409,6 @@ PATHS = {
             versioned_fields=[
                 ([('7.15', '>=')], 'copy-from', KeyInfo(write_only=True)),
                 ([('7.19', '>=')], 'lacp-mode', KeyInfo()),
-                ([('7.17', '<')], 'mlag-id', KeyInfo(can_disable=True, remove_value=0)),
             ],
             fields={
                 'arp': KeyInfo(default='enabled'),
@@ -1426,6 +1424,7 @@ PATHS = {
                 'link-monitoring': KeyInfo(default='mii'),
                 'mii-interval': KeyInfo(default='100ms'),
                 'min-links': KeyInfo(default=0),
+                'mlag-id': KeyInfo(can_disable=True, remove_value=0),
                 'mode': KeyInfo(default='balance-rr'),
                 'mtu': KeyInfo(default=1500),
                 'name': KeyInfo(),
@@ -1670,8 +1669,13 @@ PATHS = {
 
     ('interface', 'bridge', 'mlag'): APIData(
         unversioned=VersionedAPIData(
+            fixed_entries=True,
             single_value=True,
             fully_understood=True,
+            versioned_fields=[
+                ([('7.18', '>=')], 'heartbeat', KeyInfo()),
+                ([('7.17', '>=')], 'priority', KeyInfo()),
+            ],
             fields={
                 'bridge': KeyInfo(default='none'),
                 'peer-port': KeyInfo(default='none'),
@@ -2127,8 +2131,13 @@ PATHS = {
             fixed_entries=True,
             fully_understood=True,
             versioned_fields=[
+                ([('7.15', '>=')], 'l3-hw-offloading', KeyInfo()),
                 ([('7.15', '>=')], 'mirror-egress-target', KeyInfo()),
                 ([('7.15', '>=')], 'numbers', KeyInfo()),
+                ([('7.15', '>=')], 'qos-hw-offloading', KeyInfo()),
+                ([('7.15', '>=')], 'rspan', KeyInfo()),
+                ([('7.15', '>=')], 'rspan-egress-vlan-id', KeyInfo()),
+                ([('7.15', '>=')], 'rspan-ingress-vlan-id', KeyInfo()),
                 ([('7.15', '>=')], 'switch-all-ports', KeyInfo()),
             ],
             fields={
@@ -2160,6 +2169,45 @@ PATHS = {
         ],
     ),
 
+    ('interface', 'ethernet', 'switch', 'l3hw-settings'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                fields={
+                    'autorestart': KeyInfo(),
+                    'fasttrack-hw': KeyInfo(),
+                    'icmp-reply-on-error': KeyInfo(),
+                    'ipv6-hw': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'l3hw-settings', 'advanced'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                versioned_fields=[
+                    ([('7.18', '>=')], 'neigh-dump-retries', KeyInfo()),
+                ],
+                fields={
+                    'neigh-discovery-burst-delay': KeyInfo(),
+                    'neigh-discovery-burst-limit': KeyInfo(),
+                    'neigh-discovery-interval': KeyInfo(),
+                    'neigh-keepalive-interval': KeyInfo(),
+                    'partial-offload-chunk': KeyInfo(),
+                    'route-index-delay-max': KeyInfo(),
+                    'route-index-delay-min': KeyInfo(),
+                    'route-queue-limit-high': KeyInfo(),
+                    'route-queue-limit-low': KeyInfo(),
+                    'shwp-reset-counter': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
     ('interface', 'ethernet', 'switch', 'port'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('name',),
@@ -2168,10 +2216,15 @@ PATHS = {
             versioned_fields=[
                 ([('7.15', '>=')], 'egress-rate', KeyInfo()),
                 ([('7.15', '>=')], 'ingress-rate', KeyInfo()),
+                ([('7.15', '>=')], 'l3-hw-offloading', KeyInfo()),
+                ([('7.15', '>=')], 'limit-broadcasts', KeyInfo()),
+                ([('7.15', '>=')], 'limit-unknown-multicasts', KeyInfo()),
+                ([('7.15', '>=')], 'limit-unknown-unicasts', KeyInfo()),
                 ([('7.15', '>=')], 'mirror-egress', KeyInfo()),
                 ([('7.15', '>=')], 'mirror-ingress', KeyInfo()),
                 ([('7.15', '>=')], 'mirror-ingress-target', KeyInfo()),
                 ([('7.15', '>=')], 'numbers', KeyInfo()),
+                ([('7.15', '>=')], 'storm-rate', KeyInfo()),
             ],
             fields={
                 'default-vlan-id': KeyInfo(),
@@ -2199,7 +2252,181 @@ PATHS = {
         ],
     ),
 
-    #319
+    ('interface', 'ethernet', 'switch', 'qos', 'map'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                fields={
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'name': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'map', 'ip'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                fields={
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'disabled': KeyInfo(),
+                    'dscp': KeyInfo(),
+                    'map': KeyInfo(),
+                    'profile': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'map', 'vlan'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                fields={
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'dei-only': KeyInfo(),
+                    'disabled': KeyInfo(),
+                    'map': KeyInfo(),
+                    'pcp': KeyInfo(),
+                    'profile': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'port'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                fields={
+                    'egress-rate-queue0': KeyInfo(),
+                    'egress-rate-queue1': KeyInfo(),
+                    'egress-rate-queue2': KeyInfo(),
+                    'egress-rate-queue3': KeyInfo(),
+                    'egress-rate-queue4': KeyInfo(),
+                    'egress-rate-queue5': KeyInfo(),
+                    'egress-rate-queue6': KeyInfo(),
+                    'egress-rate-queue7': KeyInfo(),
+                    'map': KeyInfo(),
+                    'numbers': KeyInfo(),
+                    'pfc': KeyInfo(),
+                    'profile': KeyInfo(),
+                    'trust-l2': KeyInfo(),
+                    'trust-l3': KeyInfo(),
+                    'tx-manager': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'priority-flow-control'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                fields={
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'name': KeyInfo(),
+                    'pause-threshold': KeyInfo(),
+                    'resume-threshold': KeyInfo(),
+                    'rx': KeyInfo(),
+                    'traffic-class': KeyInfo(),
+                    'tx': KeyInfo(),
+                },
+            )),
+            ('7.16', '>=', 'Not supported anymore in version 7.16'),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'profile'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                versioned_fields=[
+                    ([('7.17', '>=')], 'disabled', KeyInfo()),
+                ],
+                fields={
+                    'color': KeyInfo(),
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'dscp': KeyInfo(),
+                    'name': KeyInfo(),
+                    'pcp': KeyInfo(),
+                    'traffic-class': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'settings'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                versioned_fields=[
+                    ([('7.20', '>=')], 'mirror-buffers', KeyInfo()),
+                ],
+                fields={
+                    'multicast-buffers': KeyInfo(),
+                    'shared-buffers': KeyInfo(),
+                    'shared-buffers-color': KeyInfo(),
+                    'shared-pool0': KeyInfo(),
+                    'shared-pool1': KeyInfo(),
+                    'shared-pool2': KeyInfo(),
+                    'shared-pool3': KeyInfo(),
+                    'shared-pool4': KeyInfo(),
+                    'shared-pool5': KeyInfo(),
+                    'shared-pool6': KeyInfo(),
+                    'shared-pool7': KeyInfo(),
+                    'treat-yellow-as': KeyInfo(),
+                    'wred-shared-threshold': KeyInfo(),
+                    'wred-threshold': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'tx-manager'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                versioned_fields=[
+                    ([('7.16', '>=')], 'queue-buffers', KeyInfo()),
+                ],
+                fields={
+                    'comment': KeyInfo(),
+                    'copy-from': KeyInfo(write_only=True),
+                    'ecn': KeyInfo(),
+                    'name': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('interface', 'ethernet', 'switch', 'qos', 'tx-manager', 'queue'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                fields={
+                    'comment': KeyInfo(),
+                    'numbers': KeyInfo(),
+                    'queue-buffers': KeyInfo(),
+                    'schedule': KeyInfo(),
+                    'shared-pool-index': KeyInfo(),
+                    'use-shared-buffers': KeyInfo(),
+                    'weight': KeyInfo(),
+                    'wred': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
     ('interface', 'ethernet', 'switch', 'rule'): APIData(
         versioned=[
             ('7.15', '>=', VersionedAPIData(
@@ -2215,10 +2442,12 @@ PATHS = {
                     'dst-mac-address': KeyInfo(can_disable=True),
                     'dst-port': KeyInfo(can_disable=True),
                     'flow-label': KeyInfo(can_disable=True),
+                    'keep-qos-fields': KeyInfo(),
                     'mac-protocol': KeyInfo(can_disable=True),
                     'mirror': KeyInfo(),
                     'mirror-ports': KeyInfo(),
                     'new-dst-ports': KeyInfo(can_disable=True),
+                    'new-qos-profile': KeyInfo(),
                     'new-vlan-id': KeyInfo(can_disable=True),
                     'new-vlan-priority': KeyInfo(can_disable=True),
                     'place-before': KeyInfo(write_only=True),
@@ -2303,7 +2532,6 @@ PATHS = {
         ),
     ),
 
-    #365
     ('interface', 'ipip'): APIData(
         versioned=[
             ('7.15', '>=', VersionedAPIData(
@@ -2496,7 +2724,6 @@ PATHS = {
         ),
     ),
 
-    #282
     ('interface', 'lte'): APIData(
         versioned=[
             ('7.15', '>=', VersionedAPIData(
@@ -3107,7 +3334,6 @@ PATHS = {
         ),
     ),
 
-    # on rb906pgs fields are disabled by default the default-values are set if enabled via gui
     ('interface', 'vpls'): APIData(
         versioned=[
             ('7.15', '>=', VersionedAPIData(
@@ -4536,7 +4762,6 @@ PATHS = {
         ],
     ),
 
-    #388
     ('interface', 'wireless', 'security-profiles'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('name',),
@@ -5128,7 +5353,6 @@ PATHS = {
         ],
     ),
 
-    #407
     ('ip', 'dhcp-client'): APIData(
         unversioned=VersionedAPIData(
             primary_keys=('interface',),
@@ -6462,7 +6686,6 @@ PATHS = {
         ],
     ),
 
-    #363
     ('ip', 'neighbor', 'discovery-settings'): APIData(
         unversioned=VersionedAPIData(
             fixed_entries=True,
@@ -6470,7 +6693,7 @@ PATHS = {
             fully_understood=True,
             versioned_fields=[
                 ([('7.16', '>=')], 'discover-interval', KeyInfo(default='30s')),
-                ([('7.15', '>=')], 'lldp-dcbx', KeyInfo(default=False)),
+                ([('7.17', '>=')], 'lldp-dcbx', KeyInfo(default=False)),
                 ([('7.15', '>=')], 'lldp-mac-phy-config', KeyInfo(default=False)),
                 ([('7.15', '>=')], 'lldp-max-frame-size', KeyInfo()),
                 ([('7.15', '>=')], 'lldp-poe-power', KeyInfo()),
@@ -6839,22 +7062,22 @@ PATHS = {
     ),
 
     ('ip', 'socks', 'access'): APIData(
-        versioned=[
-            ('7.15', '>=', VersionedAPIData(
-                fully_understood=True,
-                fields={
-                    'action': KeyInfo(default='allow'),
-                    'comment': KeyInfo(),
-                    'copy-from': KeyInfo(write_only=True),
-                    'disabled': KeyInfo(default=False),
-                    'dst-address': KeyInfo(can_disable=True),
-                    'dst-port': KeyInfo(can_disable=True),
-                    'place-before': KeyInfo(write_only=True),
-                    'src-address': KeyInfo(can_disable=True),
-                    'src-port': KeyInfo(can_disable=True),
-                },
-            )),
-        ],
+        unversioned=VersionedAPIData(
+            fully_understood=True,
+            versioned_fields=[
+                ([('7.15', '>=')], 'copy-from', KeyInfo(write_only=True)),
+                ([('7.15', '>=')], 'place-before', KeyInfo(write_only=True)),
+                ([('7.15', '>=')], 'src-port', KeyInfo(can_disable=True)),
+            ],
+            fields={
+                'action': KeyInfo(default='allow),
+                'comment': KeyInfo(can_disable=True, remove_value=''),
+                'disabled': KeyInfo(default=False),
+                'dst-address': KeyInfo(can_disable=True),
+                'dst-port': KeyInfo(can_disable=True),
+                'src-address': KeyInfo(can_disable=True),
+            },
+        ),
     ),
 
     ('ip', 'socks', 'connections'): APIData(
@@ -7208,7 +7431,7 @@ PATHS = {
                 'insert-queue-before': KeyInfo(can_disable=True, remove_value='first'),
                 'interface': KeyInfo(required=True),
                 'lease-time': KeyInfo(default='3d'),
-                'name': KeyInfo(required=True), # required=True atleast on CRS310
+                'name': KeyInfo(required=True),
                 'parent-queue': KeyInfo(can_disable=True, remove_value='none'),
                 'preference': KeyInfo(default=255),
                 'rapid-commit': KeyInfo(default=True),
@@ -9291,7 +9514,6 @@ PATHS = {
         ],
     ),
 
-    #356
     ('routing', 'isis', 'instance'): APIData(
         versioned=[
             ('7.15', '>=', VersionedAPIData(
@@ -10576,7 +10798,13 @@ PATHS = {
             single_value=True,
             fully_understood=True,
             versioned_fields=[
+                ([('7.15', '>=')], 'boot-os', KeyInfo(default='router-os')),
                 ([('7.15', '>=')], 'cpu-mode', KeyInfo()),
+                ([('7.15', '>=')], 'disable-pci', KeyInfo()),
+                ([('7.15', '>=')], 'etherboot-port', KeyInfo()),
+                ([('7.15', '>=')], 'gpio-function', KeyInfo()),
+                ([('7.15', '>=')], 'init-delay', KeyInfo()),
+                ([('7.15', '<')], 'memory-frequency', KeyInfo()),
                 ([('7.15', '>=')], 'regulatory-domain-ce', KeyInfo()),
             ],
             fields={
@@ -10584,17 +10812,11 @@ PATHS = {
                 'baud-rate': KeyInfo(default=115200),
                 'boot-delay': KeyInfo(default='2s'),
                 'boot-device': KeyInfo(default='nand-if-fail-then-ethernet'),
-                'boot-os': KeyInfo(default='router-os'),
                 'boot-protocol': KeyInfo(default='bootp'),
                 'cpu-frequency': KeyInfo(),
-                'disable-pci': KeyInfo(),
                 'enable-jumper-reset': KeyInfo(default=True),
                 'enter-setup-on': KeyInfo(), # default seems to differ per device but documentation say it's 'delete-key' not that it depends on model
-                'etherboot-port ': KeyInfo(),
                 'force-backup-booter': KeyInfo(default=False),
-                'gpio-function': KeyInfo(),
-                'init-delay': KeyInfo(),
-                'memory-frequency': KeyInfo(),
                 'preboot-etherboot': KeyInfo(default='disabled'),
                 'preboot-etherboot-server': KeyInfo(default='any'),
                 'protected-routerboot': KeyInfo(default='disabled'),
@@ -10698,6 +10920,23 @@ PATHS = {
                     'numbers': KeyInfo(),
                     'started': KeyInfo(),
                     'type': KeyInfo(),
+                },
+            )),
+        ],
+    ),
+
+    ('system', 'swos'): APIData(
+        versioned=[
+            ('7.15', '>=', VersionedAPIData(
+                fully_understood=True,
+                #fixed_entries=True,
+                fields={
+                    'address-acquisition-mode': KeyInfo(),
+                    'allow-from': KeyInfo(),
+                    'allow-from-ports': KeyInfo(),
+                    'allow-from-vlan': KeyInfo(),
+                    'identity': KeyInfo(),
+                    'static-ip-address': KeyInfo(),
                 },
             )),
         ],
