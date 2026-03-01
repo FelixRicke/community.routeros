@@ -694,6 +694,7 @@ from ansible_collections.community.routeros.plugins.module_utils._api_data impor
 )
 
 from ansible_collections.community.routeros.plugins.module_utils._api_helper import (
+    apply_value_sanitizer,
     restrict_argument_spec,
     restrict_entry_accepted,
     validate_and_prepare_restrict,
@@ -724,6 +725,14 @@ def compose_api_path(api, path):
     return api_path
 
 
+def _is_at_absent_value(field_info, value):
+    """Return True when value represents the injected absent-state sentinel."""
+    return (
+        field_info.absent_value is not None
+        and value_to_str(value) == value_to_str(field_info.absent_value)
+    )
+
+
 def find_modifications(old_entry, new_entry, path_info, module, for_text='', return_none_instead_of_fail=False):
     modifications = OrderedDict()
     updated_entry = old_entry.copy()
@@ -735,15 +744,33 @@ def find_modifications(old_entry, new_entry, path_info, module, for_text='', ret
             disabled_k = k[1:]
         elif v is None or value_to_str(v) == value_to_str(path_info.fields[k].remove_value):
             disabled_k = k
+        elif (path_info.fields[k].absent_value is not None
+              and value_to_str(v) == value_to_str(path_info.fields[k].absent_value)):
+            # desired value == absent_value should be treated as a
+            # request to disable the field, not as a regular value assignment.
+            disabled_k = k
         if disabled_k is not None:
             if disabled_k in old_entry:
-                if path_info.fields[disabled_k].remove_value is not None:
-                    modifications[disabled_k] = path_info.fields[disabled_k].remove_value
+                field_info_dk = path_info.fields[disabled_k]
+                # get_api_data injects
+                # absent_value for fields missing from print output. If the
+                # old_entry value is already the absent_value sentinel, the field
+                # is already disabled – no API command is needed.
+                if _is_at_absent_value(field_info_dk, old_entry[disabled_k]):
+                    # Leave updated_entry as-is (absent_value = already disabled)
+                    pass
                 else:
-                    modifications['!%s' % disabled_k] = ''
-                del updated_entry[disabled_k]
+                    if field_info_dk.remove_value is not None:
+                        modifications[disabled_k] = field_info_dk.remove_value
+                    else:
+                        modifications['!%s' % disabled_k] = ''
+                    del updated_entry[disabled_k]
             continue
-        if k not in old_entry and value_to_str(path_info.fields[k].default) == value_to_str(v) and not path_info.fields[k].can_disable:
+        # removed `and not path_info.fields[k].can_disable`.
+        # When the desired value equals the declared default and the field is
+        # absent from the API response, there is nothing to do regardless of
+        # whether the field supports disabling.
+        if k not in old_entry and value_to_str(path_info.fields[k].default) == value_to_str(v):
             continue
         key_info = path_info.fields[k]
         if key_info.read_only:
@@ -770,6 +797,11 @@ def find_modifications(old_entry, new_entry, path_info, module, for_text='', ret
                 continue
             if field_info.remove_value is not None and field_info.remove_value == old_entry[k]:
                 continue
+            # a field whose current value is the absent_value
+            # sentinel (injected by get_api_data) is already in its
+            # disabled/default state – do not attempt to reset it.
+            if _is_at_absent_value(field_info, old_entry[k]):
+                continue
             if field_info.can_disable:
                 if field_info.default is not None:
                     modifications[k] = field_info.default
@@ -785,11 +817,11 @@ def find_modifications(old_entry, new_entry, path_info, module, for_text='', ret
                 if return_none_instead_of_fail:
                     return None, None
                 module.fail_json(msg='Key "{key}" cannot be removed{for_text}.'.format(key=k, for_text=for_text))
-        for k in path_info.fields:
-            field_info = path_info.fields[k]
-            if k not in old_entry and k not in new_entry and field_info.can_disable and field_info.default is not None:
-                modifications[k] = field_info.default
-                updated_entry[k] = field_info.default
+        # removed the trailing loop that iterated path_info.fields
+        # looking for fields absent from both old_entry and new_entry with
+        # can_disable + default, and set them to default.  Such fields are
+        # already in their disabled/default state; the loop generated spurious
+        # modifications on every idempotent run.
     return modifications, updated_entry
 
 
@@ -802,10 +834,21 @@ def essentially_same_weight(old_entry, new_entry, path_info, module):
             disabled_k = k[1:]
         elif v is None or value_to_str(v) == value_to_str(path_info.fields[k].remove_value):
             disabled_k = k
+        elif (path_info.fields[k].absent_value is not None
+              and value_to_str(v) == value_to_str(path_info.fields[k].absent_value)):
+            # mirror the same absent_value-as-disable logic.
+            disabled_k = k
         if disabled_k is not None:
             if disabled_k in old_entry:
+                field_info_dk = path_info.fields[disabled_k]
+                # if the current value is the absent_value
+                # sentinel, the field is already disabled → not a mismatch.
+                if _is_at_absent_value(field_info_dk, old_entry[disabled_k]):
+                    continue
                 return None
             continue
+        # essentially_same_weight never had the `not can_disable` guard,
+        # so Flaw 1 does not apply here; the condition is already correct.
         if k not in old_entry and value_to_str(path_info.fields[k].default) == value_to_str(v):
             continue
         if k not in old_entry or value_to_str(old_entry[k]) != value_to_str(v):
@@ -817,6 +860,11 @@ def essentially_same_weight(old_entry, new_entry, path_info, module):
             continue
         field_info = path_info.fields[k]
         if field_info.default is not None and field_info.default == old_entry[k]:
+            continue
+        # also skip fields already at remove_value or absent_value.
+        if field_info.remove_value is not None and field_info.remove_value == old_entry[k]:
+            continue
+        if _is_at_absent_value(field_info, old_entry[k]):
             continue
         if handle_entries_content != 'ignore':
             return None
@@ -874,6 +922,21 @@ def polish_entry(entry, path_info, module, for_text):
                 module.fail_json(msg='Key "{key}" is write-only{for_text}, and handle_write_only=error.'.format(key=key, for_text=for_text))
     for key in to_remove:
         entry.pop(key)
+    # Iterate over a snapshot of keys because we may update values in-place.
+    # Only plain string values are sanitised; disabled-key entries (!key) and
+    # non-string values (booleans, integers) are left untouched – sanitizers
+    # are only registered on string path fields so this is always correct.
+    for key in list(entry):
+        if key.startswith('!'):
+            # Disabled-key entries carry no meaningful string value to sanitise.
+            continue
+        key_info = path_info.fields.get(key)
+        if key_info is None or key_info.value_sanitizer is None:
+            continue
+        raw_value = entry[key]
+        if not isinstance(raw_value, str):
+            continue
+        entry[key] = apply_value_sanitizer(key_info, raw_value, key, module)
     for key, field_info in path_info.fields.items():
         if field_info.required and key not in entry:
             module.fail_json(msg='Key "{key}" must be present{for_text}.'.format(key=key, for_text=for_text))
@@ -958,6 +1021,13 @@ def prepare_for_add(entry, path_info):
             if remove_value is not None:
                 k = real_k
                 v = remove_value
+            else:
+                # !field with remove_value=None means "disable via
+                # the !param mechanism".  The field is already at its default/absent
+                # state on a new entry, so there is nothing to send to the API.
+                # Previously this branch was a silent fall-through that put the
+                # bare '!field' key into new_entry, which the API rejects.
+                continue
         else:
             if v is None:
                 v = path_info.fields[k].remove_value
@@ -1390,9 +1460,12 @@ def sync_single_value(module, api, path, path_info, restrict_data):
     # Produce return value
     more = {}
     if module._diff:
+        # use {'data': [...]} wrapper to match the format produced
+        # by sync_list and sync_with_primary_keys, so callers and diff callbacks
+        # see a consistent structure regardless of which backend ran.
         more['diff'] = {
-            'before': old_entry,
-            'after': updated_entry,
+            'before': {'data': [old_entry]},
+            'after': {'data': [updated_entry]},
         }
     module.exit_json(
         changed=bool(modifications),

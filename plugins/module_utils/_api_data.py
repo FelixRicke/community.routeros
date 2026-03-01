@@ -12,6 +12,38 @@ __metaclass__ = type
 from ansible_collections.community.routeros.plugins.module_utils.version import LooseVersion
 
 
+# ---------------------------------------------------------------------------
+# Value sanitizers
+#
+# A value sanitizer is a callable (str) -> str that normalises a user-supplied
+# field value so it matches the form RouterOS stores and returns.  Sanitizers
+# are registered on individual KeyInfo instances via the ``value_sanitizer``
+# kwarg and are applied by ``polish_entry()`` in api_modify.py before any
+# comparison or API call is made.
+#
+# CONTRACT: a sanitizer must be idempotent – applying it twice must yield the
+# same result as applying it once.
+# ---------------------------------------------------------------------------
+
+def _sanitize_ensure_leading_slash(value):
+    # type: (str) -> str
+    """Prepend ``/`` when absent, mirroring RouterOS's implicit normalisation.
+
+    RouterOS silently prepends ``/`` to certain path fields (e.g.
+    ``container/mounts`` ``src`` and ``dst``) when entries are created or
+    updated.  Without this sanitizer Ansible would always detect a diff
+    between the user-supplied value ``usb1/data`` and the RouterOS-stored
+    value ``/usb1/data``, making the module non-idempotent.
+
+    Edge cases:
+    * Empty string → returned as-is (RouterOS maps a missing ``src`` to ``/``,
+      but that is represented separately via the field default).
+    * Already starts with ``/`` → returned unchanged.
+    """
+    if value and not value.startswith('/'):
+        return '/' + value
+    return value
+
 def _compare(a, b, comparator):
     if comparator == '==':
         return a == b
@@ -195,21 +227,75 @@ class KeyInfo(object):
                  required=False,
                  automatically_computed_from=None,
                  read_only=False,
-                 write_only=False):
+                 write_only=False,
+                 value_sanitizer=None):
+        """Metadata describing a single RouterOS API field.
+
+        Parameters
+        ----------
+        value_sanitizer : callable or None
+            Optional ``(str) -> str`` function applied to the **user-supplied**
+            string value of this field before it is compared with the current
+            RouterOS state and before it is sent to the API.  Use this to
+            normalise values that RouterOS transforms implicitly on write
+            (e.g. prepending a leading ``/`` to path fields).
+
+            Constraints:
+            * Must be callable (or ``None``).
+            * Cannot be combined with ``read_only`` or ``write_only``:
+              read-only fields are never written, and write-only fields cannot
+              be compared – neither use-case benefits from sanitisation.
+            * The function must be **idempotent**: ``f(f(x)) == f(x)``.
+        """
         if _dummy is not None:
             raise ValueError('KeyInfo() does not have positional arguments')
+
+        # --- group-exclusion check ---
+        # required, (default/can_disable), and automatically_computed_from are
+        # mutually exclusive.  default and can_disable may coexist.
         if sum([required, default is not None or can_disable, automatically_computed_from is not None]) > 1:
             raise ValueError(
                 'required, default, automatically_computed_from, and can_disable are mutually exclusive '
                 'besides default and can_disable which can be set together')
+
         if not can_disable and remove_value is not None:
             raise ValueError('remove_value can only be specified if can_disable=True')
-        if absent_value is not None and any([default is not None, automatically_computed_from is not None, can_disable]):
-            raise ValueError('absent_value can not be combined with default, automatically_computed_from, can_disable=True, or absent_value')
+
+        # absent_value is a read/compare concern (what value represents
+        # "field absent from print output") and is orthogonal to default
+        # (user-omission fill-in) and can_disable (write mechanism).
+        # The only combinations that remain genuinely incompatible are:
+        #   - absent_value + required: a required field can never be absent
+        #   - absent_value + automatically_computed_from: computed fields are
+        #     read-only; absent_value only makes sense in write/compare paths
+        #   - absent_value + read_only: caught by the read_only block below
+        #
+        # The old constraint also incorrectly listed "or absent_value" at the
+        # end of its own error message (copy-paste artifact).
+        if absent_value is not None and required:
+            raise ValueError('absent_value cannot be combined with required')
+        if absent_value is not None and automatically_computed_from is not None:
+            raise ValueError('absent_value cannot be combined with automatically_computed_from')
+
         if read_only and write_only:
             raise ValueError('read_only and write_only cannot be used at the same time')
         if read_only and any([can_disable, remove_value is not None, absent_value is not None, default is not None, required]):
             raise ValueError('read_only can not be combined with can_disable, remove_value, absent_value, default, or required')
+
+        if value_sanitizer is not None and not callable(value_sanitizer):
+            raise ValueError('value_sanitizer must be a callable or None')
+        if value_sanitizer is not None and read_only:
+            raise ValueError(
+                'value_sanitizer cannot be combined with read_only: '
+                'read-only fields are never written so sanitisation has no effect'
+            )
+        if value_sanitizer is not None and write_only:
+            raise ValueError(
+                'value_sanitizer cannot be combined with write_only: '
+                'write-only fields cannot be read back from RouterOS so '
+                'the sanitised value cannot be verified'
+            )
+        
         self.can_disable = can_disable
         self.remove_value = remove_value
         self.automatically_computed_from = automatically_computed_from
@@ -218,6 +304,7 @@ class KeyInfo(object):
         self.absent_value = absent_value
         self.read_only = read_only
         self.write_only = write_only
+        self.value_sanitizer = value_sanitizer
 
 
 def split_path(path):
@@ -923,7 +1010,7 @@ PATHS = {
 
     ('container', 'mounts'): APIData(
         versioned=[
-            ('7.15', '>=', VersionedAPIData(
+            ('7.22', '<', VersionedAPIData(
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.21', '>=')], 'disabled', KeyInfo()),
@@ -936,6 +1023,19 @@ PATHS = {
                     # 'copy-from': KeyInfo(write_only=True),
                     'dst': KeyInfo(),
                     'src': KeyInfo(),
+                },
+            )),
+            ('7.22', '>=', VersionedAPIData(
+                primary_keys=('dst', 'list',),
+                fully_understood=True,
+                fields={
+                    'comment': KeyInfo(can_disable=True, remove_value=''),
+                    # 'copy-from': KeyInfo(write_only=True),
+                    'disabled': KeyInfo(default=False),
+                    'dst': KeyInfo(value_sanitizer=_sanitize_ensure_leading_slash),
+                    'list': KeyInfo(),
+                    'read-only': KeyInfo(default=False),
+                    'src': KeyInfo(default="/", value_sanitizer=_sanitize_ensure_leading_slash),
                 },
             )),
         ],
@@ -1561,7 +1661,7 @@ PATHS = {
             primary_keys=('name',),
             fully_understood=True,
             versioned_fields=[
-                ([('7.20', '>=')], 'add-dhcp-option82', KeyInfo(default=False)),
+                ([('7.20', '>=')], 'add-dhcp-option82', KeyInfo(absent_value=False, can_disable=True, default=False, remove_value=False)),
                 # ([('7.15', '>=')], 'copy-from', KeyInfo(write_only=True)),
                 ([('7.16', '>=')], 'forward-reserved-addresses', KeyInfo(default=False)),
                 ([('7.20', '>=')], 'igmp-version', KeyInfo(default=2)),
@@ -5722,15 +5822,15 @@ PATHS = {
                 versioned_fields=[
                     ([('7.16', '>=')], 'comment', KeyInfo(can_disable=True, remove_value='')),
                     # ([('7.15', '>=')], 'copy-from', KeyInfo(write_only=True)),
-                    ([('7.16', '>=')], 'matching-type', KeyInfo()),
+                    ([('7.16', '>=')], 'matching-type', KeyInfo(required=True)),
                 ],
-                fields={
-                    'address-pool': KeyInfo(default='none'),
+                fields={                    
+                    'address-pool': KeyInfo(default='static-only'),
                     'code': KeyInfo(required=True),
                     'disabled': KeyInfo(default=False),
                     'name': KeyInfo(required=True),
-                    'option-set': KeyInfo(),
-                    'server': KeyInfo(default='all'),
+                    'option-set': KeyInfo(can_disable=True, remove_value=False),
+                    'server': KeyInfo(can_disable=True, remove_value='all'),
                     'value': KeyInfo(required=True),
                 },
             )),

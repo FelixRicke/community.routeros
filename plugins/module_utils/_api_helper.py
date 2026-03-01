@@ -78,10 +78,15 @@ def restrict_entry_accepted(entry, path_info, restrict_data, compat=True):
         field = rule['field']
         field_info = path_info.fields[field]
         value = entry.get(field)
-        if value is None:
-            value = field_info.default
-        if field not in entry and field_info.absent_value:
-            value = field_info.absent_value
+
+        # use `is not None` instead of truthiness so that
+        # False/0/'' absent_values are handled correctly; apply absent_value
+        # before default so it takes priority when both are declared.
+        if field not in entry:
+            if field_info.absent_value is not None:
+                value = field_info.absent_value
+            elif field_info.default is not None:
+                value = field_info.default
 
         # Check
         matches_rule = _test_rule_except_invert(value, rule, compat=compat)
@@ -106,3 +111,48 @@ def restrict_argument_spec():
             ),
         ),
     )
+
+def apply_value_sanitizer(key_info, value, key_name, module):
+    """Apply ``key_info.value_sanitizer`` to *value* and warn on change.
+
+    This is the central call-site for value sanitisation. It is intentionally
+    kept separate from ``KeyInfo`` itself so that ``AnsibleModule`` (needed for
+    ``module.warn()``) is never imported by ``api_data.py``.
+
+    Parameters
+    ----------
+    key_info : KeyInfo
+        Metadata for the field being sanitised.
+    value : str or None
+        The **string** value to sanitise.  Pass ``None`` to skip (the function
+        returns ``None`` immediately).  Callers should convert the raw value
+        with ``value_to_str()`` before passing it here when the raw type may
+        not be ``str``.
+    key_name : str
+        Human-readable field name used in the warning message.
+    module : AnsibleModule
+        Used to emit ``module.warn()`` when the value is modified.
+
+    Returns
+    -------
+    str or None
+        The sanitised string value, or *value* unchanged if no sanitizer is
+        registered or *value* is ``None``.
+    """
+    if key_info.value_sanitizer is None or value is None:
+        return value
+
+    sanitized = key_info.value_sanitizer(value)
+
+    if sanitized != value:
+        module.warn(
+            'Value of field "{key}" was automatically normalised from {original!r} to '
+            '{sanitized!r}. Consider updating your playbook to use the normalised '
+            'value directly to avoid this warning.'.format(
+                key=key_name,
+                original=value,
+                sanitized=sanitized,
+            )
+        )
+
+    return sanitized

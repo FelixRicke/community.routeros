@@ -230,7 +230,19 @@ def filter_entries(entries, ignore_dynamic=False, ignore_builtin=False):
     return result, has_dynamic, has_builtin
 
 
+# Fields where RouterOS stores the "disabled/absent" state as an empty string
+# rather than omitting the field entirely.  Both '' and None are treated as
+# equivalent "not set" for these fields.
 DISABLED_MEANS_EMPTY_STRING = ('comment', )
+
+
+def _normalize_disabled(key, value):
+    """For DISABLED_MEANS_EMPTY_STRING fields, collapse '' to None so that
+    comparisons are symmetric regardless of whether the caller used '' or None
+    and regardless of whether RouterOS returned '' or omitted the field."""
+    if key in DISABLED_MEANS_EMPTY_STRING and value == '':
+        return None
+    return value
 
 
 def main():
@@ -280,17 +292,24 @@ def main():
 
     api_path = compose_api_path(api, path)
 
-    old_data, has_dynamic, has_builtin = filter_entries(list(api_path), ignore_dynamic=ignore_dynamic or False, ignore_builtin=ignore_builtin or False)
+    old_data, has_dynamic, has_builtin = filter_entries(
+        list(api_path),
+        ignore_dynamic=ignore_dynamic or False,
+        ignore_builtin=ignore_builtin or False,
+    )
     new_data = [entry.copy() for entry in old_data]
+
     if ignore_dynamic is None and has_dynamic:
         module.deprecate(
-            "The current default (false) of the ignore_dynamic function has been deprecated. It will change to `true` in community.routeros 4.0.0.",
+            "The current default (false) of the ignore_dynamic function has been deprecated."
+            " It will change to `true` in community.routeros 4.0.0.",
             version="4.0.0",
             collection_name="community.routeros",
         )
     if ignore_builtin is None and has_builtin:
         module.deprecate(
-            "The current default (false) of the ignore_builtin function has been deprecated. It will change to `true` in community.routeros 4.0.0.",
+            "The current default (false) of the ignore_builtin function has been deprecated."
+            " It will change to `true` in community.routeros 4.0.0.",
             version="4.0.0",
             collection_name="community.routeros",
         )
@@ -305,8 +324,12 @@ def main():
                 key = key[1:]
                 value = None
             current_value = entry.get(key)
-            if key in DISABLED_MEANS_EMPTY_STRING and value == '' and current_value is None:
-                current_value = value
+            # normalise both sides so that '' and None
+            # are treated as equivalent for DISABLED_MEANS_EMPTY_STRING fields.
+            # Previously only current_value was adjusted and only when value==''
+            # which meant `!comment` never matched entries with comment=''.
+            current_value = _normalize_disabled(key, current_value)
+            value = _normalize_disabled(key, value)
             if value_to_str(current_value) != value_to_str(value):
                 matches = False
                 break
@@ -314,13 +337,20 @@ def main():
             matching_entries.append((index, entry))
 
     # Check whether the correct amount of entries was found
-    if matching_entries:
-        if len(matching_entries) < module.params['require_matches_min']:
-            module.fail_json(msg='Found %d entries, but expected at least %d' % (len(matching_entries), module.params['require_matches_min']))
-        if module.params['require_matches_max'] is not None and len(matching_entries) > module.params['require_matches_max']:
-            module.fail_json(msg='Found %d entries, but expected at most %d' % (len(matching_entries), module.params['require_matches_max']))
+    match_count = len(matching_entries)
+    if match_count > 0:
+        if match_count < module.params['require_matches_min']:
+            module.fail_json(msg='Found %d entries, but expected at least %d' % (match_count, module.params['require_matches_min']))
+        if module.params['require_matches_max'] is not None and match_count > module.params['require_matches_max']:
+            module.fail_json(msg='Found %d entries, but expected at most %d' % (match_count, module.params['require_matches_max']))
     elif not module.params['allow_no_matches']:
-        module.fail_json(msg='Found no entries, but allow_no_matches=false')
+        # report the minimum expectation in the error message so
+        # the user knows why the task failed, not just that nothing matched.
+        min_required = module.params['require_matches_min']
+        if min_required > 0:
+            module.fail_json(msg='Found no entries, but expected at least %d' % min_required)
+        else:
+            module.fail_json(msg='Found no entries, but allow_no_matches=false')
 
     # Identify entries to update
     modifications = []
@@ -328,12 +358,12 @@ def main():
         modification = {}
         for key, value in values.items():
             if key.startswith('!'):
-                # Allow to specify keys to remove by prepending '!'
                 key = key[1:]
                 value = None
             current_value = entry.get(key)
-            if key in DISABLED_MEANS_EMPTY_STRING and value == '' and current_value is None:
-                current_value = value
+            # same symmetric normalisation as in find loop.
+            current_value = _normalize_disabled(key, current_value)
+            value = _normalize_disabled(key, value)
             if value_to_str(current_value) != value_to_str(value):
                 if value is None:
                     disable_key = '!%s' % key
@@ -361,19 +391,24 @@ def main():
                         error=to_native(e),
                     )
                 )
-        new_data, has_dynamic, has_builtin = filter_entries(list(api_path), ignore_dynamic=ignore_dynamic or False, ignore_builtin=ignore_builtin or False)
-        if ignore_dynamic is None and has_dynamic:
-            module.deprecate(
-                "The current default (false) of the ignore_dynamic function has been deprecated. It will change to `true` in community.routeros 4.0.0.",
-                version="4.0.0",
-                collection_name="community.routeros",
-            )
-        if ignore_builtin is None and has_builtin:
-            module.deprecate(
-                "The current default (false) of the ignore_builtin function has been deprecated. It will change to `true` in community.routeros 4.0.0.",
-                version="4.0.0",
-                collection_name="community.routeros",
-            )
+
+        # removed duplicate module.deprecate() calls here.
+        # The deprecation warnings were already emitted on the first fetch above;
+        # re-emitting them on the post-modification re-fetch is pure noise.
+        new_data, _dyn, _blt = filter_entries(
+            list(api_path),
+            ignore_dynamic=ignore_dynamic or False,
+            ignore_builtin=ignore_builtin or False,
+        )
+
+        # after re-fetching, update matching_entries to point at
+        # the actual post-modification API state so the diff reflects reality
+        # rather than the in-memory pre-re-fetch copies.
+        new_data_by_id = {entry['.id']: entry for entry in new_data if '.id' in entry}
+        matching_entries = [
+            (index, new_data_by_id.get(entry.get('.id'), entry))
+            for index, entry in matching_entries
+        ]
 
     # Produce return value
     more = {}
@@ -391,7 +426,7 @@ def main():
         changed=bool(modifications),
         old_data=old_data,
         new_data=new_data,
-        match_count=len(matching_entries),
+        match_count=match_count,
         modify_count=len(modifications),
         **more
     )

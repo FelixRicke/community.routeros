@@ -727,6 +727,8 @@ def main():
                     continue
             if not restrict_entry_accepted(entry, path_info, restrict_data):
                 continue
+
+            # Strip fields not in the schema (unfiltered=False mode)
             if not unfiltered:
                 for k in list(entry):
                     if k == '.id':
@@ -737,23 +739,43 @@ def main():
                         continue
                     if k not in path_info.fields:
                         entry.pop(k)
+
+            # Represent absent fields according to handle_disabled.
+            # skip fields that have absent_value — those are
+            # handled in the per-field loop below so their specific sentinel
+            # value is used instead of the generic None/exclamation marker.
             if handle_disabled != 'omit':
                 for k, field_info in path_info.fields.items():
                     if field_info.write_only:
                         entry.pop(k, None)
                         continue
                     if k not in entry:
+                        if field_info.absent_value is not None:
+                            # Will be filled with absent_value in the loop below.
+                            continue
                         if handle_disabled == 'exclamation':
-                            k = '!%s' % k
-                        entry[k] = None
+                            entry['!%s' % k] = None
+                        else:
+                            # null-value
+                            entry[k] = None
+
+            # Per-field post-processing.
             for k, field_info in path_info.fields.items():
+                # use `is not None` instead of truthiness
+                # so False/0/'' absent_values work; inject BEFORE hide_defaults
+                # so that hide_defaults can suppress the injected value when it
+                # matches the declared default (e.g. absent_value=False,
+                # default=False → suppressed with hide_defaults=True).
+                if field_info.absent_value is not None and k not in entry:
+                    entry[k] = field_info.absent_value
+
                 if hide_defaults:
                     if field_info.default is not None and entry.get(k) == field_info.default:
                         entry.pop(k)
-                if field_info.absent_value and k not in entry:
-                    entry[k] = field_info.absent_value
+
                 if not include_read_only and k in entry and field_info.read_only:
                     entry.pop(k)
+
             result.append(entry)
 
         module.exit_json(result=result)
