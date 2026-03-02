@@ -890,6 +890,86 @@ def format_pk(primary_keys, values):
 
 
 def polish_entry(entry, path_info, module, for_text):
+    """Validate, normalise, and clean a user-supplied data entry in-place.
+
+    This is the central pre-processing step applied to every entry before it
+    is compared against or sent to RouterOS.  It performs the following
+    operations **in order**:
+
+    1. **Strip `.id`** – any caller-supplied ``.id`` key is silently removed,
+       since the module never accepts an externally provided entry ID.
+
+    2. **Per-key structural validation** – for every ``key``/``value`` pair:
+
+       - Detects the ``!key`` disable-syntax and fails if both ``key`` and
+         ``!key`` are present simultaneously.
+       - Fails if the key (after stripping a leading ``!``) is not registered
+         in ``path_info.fields``.
+       - Validates disable semantics: fails if ``can_disable`` is ``False``
+         for a ``!key`` or ``None``-valued key.
+       - Validates that a disabled key (``!key`` or ``value=None``) carries no
+         meaningful value.
+       - Handles read-only fields according to ``handle_readonly``: fails on
+         ``'error'``, queues the key for removal on ``'ignore'``.
+       - Handles write-only fields according to ``handle_writeonly``: fails on
+         ``'error'``.
+
+    3. **Remove read-only keys** – all keys queued in step 2 are deleted from
+       the entry.
+
+    4. **Apply value sanitizers** – for every remaining non-``!``-prefixed key
+       whose ``KeyInfo.value_sanitizer`` is set and whose value is a ``str``,
+       calls :func:`apply_value_sanitizer`.  This normalises values such as
+       ``'TEST'`` → ``'/TEST'`` and emits a ``module.warn()`` when the value
+       is changed.  The sanitised value is written back into the entry
+       in-place.
+
+    5. **Required-field check** – fails if any field marked
+       ``field_info.required`` is absent from the entry.
+
+    6. **``required_one_of`` check** – fails if no key from a non-empty
+       required-one-of group is present in the entry.
+
+    7. **``mutually_exclusive`` check** – fails if more than one key from a
+       mutually-exclusive group is present in the entry.
+
+    .. note::
+        Step 4 is the **only** step that mutates field *values*.  All other
+        steps either remove keys (steps 1, 3) or raise ``fail_json``.
+        Callers that need to derive a lookup key from primary-key fields (e.g.
+        for matching against RouterOS state) **must** call this function first
+        so that sanitised values are used, otherwise normalised RouterOS
+        values (e.g. ``'/TEST'``) will not match raw user input (e.g.
+        ``'TEST'``), breaking idempotency.
+
+    Parameters
+    ----------
+    entry : dict
+        The user-supplied data entry to process.  Modified **in-place**.
+    path_info : PathInfo
+        Metadata for the current RouterOS path, including field definitions
+        (``fields``), required/optional constraints (``required``,
+        ``required_one_of``, ``mutually_exclusive``), and per-field sanitizers.
+    module : AnsibleModule
+        Used for ``module.warn()`` (sanitizer warnings) and
+        ``module.fail_json()`` (validation errors).
+    for_text : str
+        A human-readable context string appended to all error messages, e.g.
+        ``' at index 3'`` or ``' for values dst=/TEST'``.  Should describe
+        which entry is being processed to aid debugging.
+
+    Returns
+    -------
+    None
+        The function modifies *entry* in-place and returns nothing.
+
+    Raises
+    ------
+    SystemExit
+        Via ``module.fail_json()`` on any validation error (unknown key,
+        illegal disable, read-only/write-only violation, missing required
+        field, etc.).
+    """
     if '.id' in entry:
         entry.pop('.id')
     to_remove = []
@@ -1240,24 +1320,31 @@ def sync_with_primary_keys(module, api, path, path_info, restrict_data):
                         index=index + 1,
                     )
                 )
-        pks = tuple(value_to_str(entry[primary_key]) for primary_key in primary_keys)
-        if pks in new_data_by_key:
-            module.fail_json(
-                msg='Every element in data must contain a unique value for {primary_keys}. The value {value} appears at least twice.'.format(
-                    primary_keys=','.join(primary_keys),
-                    value=','.join(['"{0}"'.format(pk) for pk in pks]),
-                )
-            )
-        polish_entry(
-            entry, path_info, module,
-            ' for {values}'.format(
-                values=', '.join([
-                    '{primary_key}="{value}"'.format(primary_key=primary_key, value=value)
-                    for primary_key, value in zip(primary_keys, pks)
-                ])
-            ),
+    # Build for_text from raw values — only used for human-readable error
+    # messages inside polish_entry, so pre-sanitization values are fine here
+    for_text = ' for values {0}'.format(
+        ', '.join(
+            '{pk}={value!r}'.format(pk=pk, value=entry[pk])
+            for pk in primary_keys
         )
-        new_data_by_key[pks] = entry
+    )
+
+    # Sanitize the entry in-place (e.g. 'TEST' → '/TEST')
+    polish_entry(entry, path_info, module, for_text)
+
+    # Compute pks AFTER sanitization so the key matches what RouterOS returns
+    pks = tuple(value_to_str(entry[primary_key]) for primary_key in primary_keys)
+
+    if pks in new_data_by_key:
+        module.fail_json(
+            msg='Every element in data must contain a unique value for {pks}. '
+                'The value {value} appears at least twice.'.format(
+                    pks=', '.join(primary_keys),
+                    value=', '.join('{0}'.format(pk) for pk in pks),
+                )
+        )
+
+    new_data_by_key[pks] = entry
 
     api_path = compose_api_path(api, path)
 
