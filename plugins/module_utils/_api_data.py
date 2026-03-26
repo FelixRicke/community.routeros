@@ -2354,11 +2354,13 @@ PATHS = {
         ),
     ),
 
+    # CRS1xx/2xx have fixed_entries and single_value=True, others have no single_value=True so they have a primary_key instead..
     ('interface', 'ethernet', 'switch'): APIData(
         unversioned=VersionedAPIData(
             fixed_entries=True,
             fully_understood=True,
-            primary_keys=('name',),
+            # primary_keys=('name',),
+            single_value=True,
             versioned_fields=[
                 ([('7.15', '>=')], 'bridge-type', KeyInfo()),
                 ([('7.15', '>=')], 'bypass-ingress-port-policing-for', KeyInfo()),
@@ -2827,33 +2829,31 @@ PATHS = {
         ),
     ),
 
+    # CRS112 (so probably all CRS1xx/2xx) have no fixed port-isolation entries;
+    # other devices have those as fixed_entries
     ('interface', 'ethernet', 'switch', 'port-isolation'): APIData(
         versioned=[
-            ('7.15', '>=', VersionedAPIData(
-                fully_understood=True,
-                fields={
-                    'comment': KeyInfo(),
-                    # 'copy-from': KeyInfo(write_only=True),
-                    'disabled': KeyInfo(),
-                    'flow-id': KeyInfo(),
-                    'forwarding-override': KeyInfo(),
-                    'forwarding-type': KeyInfo(),
-                    'mac-profile': KeyInfo(),
-                    'numbers': KeyInfo(),
-                    # 'place-before': KeyInfo(write_only=True),
-                    'port-profile': KeyInfo(),
-                    'ports': KeyInfo(),
-                    'protocol-type': KeyInfo(),
-                    'registration-status': KeyInfo(),
-                    'traffic-type': KeyInfo(),
-                    'type': KeyInfo(),
-                    'vlan-profile': KeyInfo(),
-                },
-            )),
             ('6.43', '>=', VersionedAPIData(
-                fixed_entries=True,
+                # fixed_entries=True,
+                # primary_keys=('name',),
                 fully_understood=True,
-                primary_keys=('name',),
+                versioned_fields=[
+                    ([('7.15.2', '>=')], 'comment', KeyInfo()),
+                    # ([('7.15.2', '>=')], 'copy-from', KeyInfo(write_only=True)),
+                    ([('7.15.2', '>=')], 'disabled', KeyInfo()),
+                    ([('7.15.2', '>=')], 'flow-id', KeyInfo()),
+                    ([('7.15.2', '>=')], 'forwarding-type', KeyInfo()),
+                    ([('7.15.2', '>=')], 'mac-profile', KeyInfo()),
+                    ([('7.15', '>=')], 'numbers', KeyInfo()),
+                    # ([('7.15.2', '>=')], 'place-before', KeyInfo(write_only=True)),
+                    ([('7.15.2', '>=')], 'port-profile', KeyInfo()),
+                    ([('7.15.2', '>=')], 'ports', KeyInfo()),
+                    ([('7.15.2', '>=')], 'protocol-type', KeyInfo()),
+                    ([('7.15.2', '>=')], 'registration-status', KeyInfo()),
+                    ([('7.15.2', '>=')], 'traffic-type', KeyInfo()),
+                    ([('7.15.2', '>=')], 'type', KeyInfo()),
+                    ([('7.15.2', '>=')], 'vlan-profile', KeyInfo()),
+                ],
                 fields={
                     'forwarding-override': KeyInfo(can_disable=True),
                     'name': KeyInfo(),
