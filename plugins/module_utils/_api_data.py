@@ -2318,10 +2318,12 @@ PATHS = {
         ),
     ),
 
+    # CRS1xx/2xx have fixed_entries and single_value=True, others have no single_value=True so they have a primary_key instead..
     ('interface', 'ethernet', 'switch'): APIData(
         unversioned=VersionedAPIData(
-            primary_keys=('name',),
+            # primary_keys=('name',),
             fixed_entries=True,
+            single_value=True,
             fully_understood=True,
             versioned_fields=[
                 ([('7.15.2', '>=')], 'bridge-type', KeyInfo()),
@@ -2796,7 +2798,8 @@ PATHS = {
     ('interface', 'ethernet', 'switch', 'port-isolation'): APIData(
         versioned=[
             ('6.43', '>=', VersionedAPIData(
-                primary_keys=('name',),
+                # fixed_entries=True,
+                # primary_keys=('name',),
                 fully_understood=True,
                 versioned_fields=[
                     ([('7.15.2', '>=')], 'comment', KeyInfo()),
