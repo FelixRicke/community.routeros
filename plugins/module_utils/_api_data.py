@@ -49,6 +49,16 @@ def _sanitize_ensure_leading_slash(value):
     return value
 
 
+# Registry of detection strategy names -> callables
+# Callables are NOT defined here (they need API access);
+# they're registered by the modules at runtime.
+# _api_data.py only stores the string keys.
+HARDWARE_DETECTOR_KEYS = {
+    'switch_chip_type',
+    # Future: 'wireless_chip_type', etc.
+}
+
+
 def _compare(a, b, comparator):
     if comparator == '==':
         return a == b
@@ -68,12 +78,47 @@ def _compare(a, b, comparator):
 class APIData(object):
     def __init__(self,
                  unversioned=None,
-                 versioned=None):
-        if (unversioned is None) == (versioned is None):
-            raise ValueError('either unversioned or versioned must be provided')
+                 versioned=None,
+                 hardware_detect=None,
+                 hardware_variants=None):
+
+        # --- Validation ---
+        if hardware_variants is not None:
+            if unversioned is not None or versioned is not None:
+                raise ValueError('Cannot combine hardware_variants with unversioned/versioned')
+            if hardware_detect is None:
+                raise ValueError('hardware_detect required when hardware_variants is set')
+            for key, variant in hardware_variants.items():
+                if not isinstance(variant, APIData):
+                    raise ValueError(f'hardware_variants[{key!r}] must be an APIData instance')
+                if variant.hardware_variants is not None:
+                    raise ValueError(f'hardware_variants[{key!r}] must not itself have hardware_variants')
+        elif hardware_detect is not None:
+            raise ValueError('hardware_detect requires hardware_variants')
+        else:
+            if (unversioned is None) == (versioned is None):
+                raise ValueError('either unversioned or versioned must be provided')
+
         self.unversioned = unversioned
         self.versioned = versioned
-        if self.unversioned is not None:
+        self.hardware_detect = hardware_detect
+        self.hardware_variants = hardware_variants
+
+        # --- Derive fully_understood, needs_version, has_identifier ---
+        if self.hardware_variants is not None:
+            # fully_understood if ANY variant is fully_understood
+            self.fully_understood = any(
+                v.fully_understood for v in self.hardware_variants.values()
+            )
+            # needs_version if ANY variant needs_version
+            self.needs_version = any(
+                v.needs_version for v in self.hardware_variants.values()
+            )
+            # has_identifier if ANY variant has_identifier
+            self.has_identifier = any(
+                v.has_identifier for v in self.hardware_variants.values()
+            )
+        elif self.unversioned is not None:
             self.needs_version = self.unversioned.needs_version
             self.fully_understood = self.unversioned.fully_understood
             self.has_identifier = self.unversioned.has_identifier
@@ -131,6 +176,30 @@ class APIData(object):
             raise ValueError('either provide_version() was not called or it returned False')
         return self._current
 
+    def resolve(self, ros_version, hardware_variant_key=None):
+        if self.hardware_variants is not None:
+            if hardware_variant_key is None:
+                raise ValueError(
+                    'This path requires hardware detection but no variant key was provided'
+                )
+            inner = self.hardware_variants[hardware_variant_key]
+            # inner is a regular APIData — use its existing resolution logic
+            return inner.resolve(ros_version)
+        else:
+            # Existing version resolution logic, unchanged
+            return self._resolve_version(ros_version)
+
+    @staticmethod
+    def _resolve_version(ros_version, unversioned=None, versioned=None):
+        """Pick the right VersionedAPIData from unversioned or versioned list."""
+        if unversioned is not None:
+            return unversioned
+        # Existing version-matching logic that walks the versioned list
+        # and finds the matching (version, op, VersionedAPIData) entry
+        for version_str, op, versioned_data in versioned:
+            if _version_matches(ros_version, version_str, op):
+                return versioned_data
+        raise ValueError(f'No matching version data for RouterOS {ros_version}')
 
 class VersionedAPIData(object):
     def __init__(self,
@@ -2365,56 +2434,71 @@ PATHS = {
         ),
     ),
 
-    # CRS1xx/2xx have fixed_entries and single_value=True, others have no single_value=True so they have a primary_key instead..
     ('interface', 'ethernet', 'switch'): APIData(
-        unversioned=VersionedAPIData(
-            fixed_entries=True,
-            fully_understood=True,
-            # primary_keys=('name',),
-            single_value=True,
-            versioned_fields=[
-                ([('7.15', '>=')], 'bridge-type', KeyInfo()),
-                ([('7.15', '>=')], 'bypass-ingress-port-policing-for', KeyInfo()),
-                ([('7.15', '>=')], 'bypass-l2-security-check-filter-for', KeyInfo()),
-                ([('7.15', '>=')], 'bypass-vlan-ingress-filter-for', KeyInfo()),
-                ([('7.15', '>=')], 'drop-if-invalid-or-src-port-not-member-of-vlan-on-ports', KeyInfo()),
-                ([('7.15', '>=')], 'drop-if-no-vlan-assignment-on-ports', KeyInfo()),
-                ([('7.15', '>=')], 'egress-mirror-ratio', KeyInfo()),
-                ([('7.15', '>=')], 'egress-mirror0', KeyInfo()),
-                ([('7.15', '>=')], 'egress-mirror1', KeyInfo()),
-                ([('7.15', '>=')], 'fdb-uses', KeyInfo()),
-                ([('7.15', '>=')], 'forward-unknown-vlan', KeyInfo()),
-                ([('7.15', '>=')], 'ingress-mirror-ratio', KeyInfo()),
-                ([('7.15', '>=')], 'ingress-mirror0', KeyInfo()),
-                ([('7.15', '>=')], 'ingress-mirror1', KeyInfo()),
-                ([('7.15', '>=')], 'l3-hw-offloading', KeyInfo()),
-                ([('7.15', '>=')], 'mac-level-isolation', KeyInfo()),
-                ([('7.15', '>=')], 'mirror-egress-if-ingress-mirrored', KeyInfo()),
-                ([('7.15', '>=')], 'mirror-egress-target', KeyInfo()),
-                ([('7.15', '>=')], 'mirror-tx-on-mirror-port', KeyInfo()),
-                ([('7.15', '>=')], 'mirrored-packet-drop-precedence', KeyInfo()),
-                ([('7.15', '>=')], 'mirrored-packet-qos-priority', KeyInfo()),
-                ([('7.15', '>=')], 'multicast-lookup-mode', KeyInfo()),
-                ([('7.15', '>=')], 'numbers', KeyInfo()),
-                ([('7.15', '>=')], 'override-existing-when-ufdb-full', KeyInfo()),
-                ([('7.15', '>=')], 'qos-hw-offloading', KeyInfo()),
-                ([('7.15', '>=')], 'rspan', KeyInfo()),
-                ([('7.15', '>=')], 'rspan-egress-vlan-id', KeyInfo()),
-                ([('7.15', '>=')], 'rspan-ingress-vlan-id', KeyInfo()),
-                ([('7.15', '>=')], 'switch-all-ports', KeyInfo()),
-                ([('7.15', '>=')], 'unicast-fdb-timeout', KeyInfo()),
-                ([('7.15', '>=')], 'unknown-vlan-lookup-mode', KeyInfo()),
-                ([('7.15', '>=')], 'use-cvid-in-one2one-vlan-lookup', KeyInfo()),
-                ([('7.15', '>=')], 'use-svid-in-one2one-vlan-lookup', KeyInfo()),
-                ([('7.15', '>=')], 'vlan-uses', KeyInfo()),
-            ],
-            fields={
-                'cpu-flow-control': KeyInfo(default=True),
-                'mirror-source': KeyInfo(default='none'),
-                'mirror-target': KeyInfo(default='none'),
-                'name': KeyInfo(),
-            },
-        ),
+        hardware_detect='switch_chip_type',
+        hardware_variants={
+            'single_entry_switch': APIData(
+                    versioned=[
+                        ('7.15', '>=', VersionedAPIData(
+                            fixed_entries=True,
+                            fully_understood=True,
+                            single_value=True,
+                            fields={
+                                'bridge-type': KeyInfo(),
+                                'bypass-ingress-port-policing-for': KeyInfo(),
+                                'bypass-l2-security-check-filter-for': KeyInfo(),
+                                'bypass-vlan-ingress-filter-for': KeyInfo(),
+                                'drop-if-invalid-or-src-port-not-member-of-vlan-on-ports': KeyInfo(),
+                                'drop-if-no-vlan-assignment-on-ports': KeyInfo(),
+                                'egress-mirror-ratio': KeyInfo(),
+                                'egress-mirror0': KeyInfo(),
+                                'egress-mirror1': KeyInfo(),
+                                'fdb-uses': KeyInfo(),
+                                'forward-unknown-vlan': KeyInfo(),
+                                'ingress-mirror-ratio': KeyInfo(),
+                                'ingress-mirror0': KeyInfo(),
+                                'ingress-mirror1': KeyInfo(),
+                                'mac-level-isolation': KeyInfo(),
+                                'mirror-egress-if-ingress-mirrored': KeyInfo(),
+                                'mirror-tx-on-mirror-port': KeyInfo(),
+                                'mirrored-packet-drop-precedence': KeyInfo(),
+                                'mirrored-packet-qos-priority': KeyInfo(),
+                                'multicast-lookup-mode': KeyInfo(),
+                                'name': KeyInfo(),
+                                'override-existing-when-ufdb-full': KeyInfo(),
+                                'unicast-fdb-timeout': KeyInfo(),
+                                'unknown-vlan-lookup-mode': KeyInfo(),
+                                'use-cvid-in-one2one-vlan-lookup': KeyInfo(),
+                                'use-svid-in-one2one-vlan-lookup': KeyInfo(),
+                                'vlan-uses': KeyInfo(),
+                            },
+                        )),
+                    ],
+            ),
+            'multi_entry_switch': APIData(
+                unversioned=VersionedAPIData(
+                    fixed_entries=True,
+                    fully_understood=True,
+                    primary_keys=('name',),
+                    versioned_fields=[
+                        ([('7.15', '>=')], 'l3-hw-offloading', KeyInfo()),
+                        ([('7.15', '>=')], 'mirror-egress-target', KeyInfo()),
+                        ([('7.15', '>=')], 'numbers', KeyInfo()),
+                        ([('7.15', '>=')], 'qos-hw-offloading', KeyInfo()),
+                        ([('7.15', '>=')], 'rspan', KeyInfo()),
+                        ([('7.15', '>=')], 'rspan-egress-vlan-id', KeyInfo()),
+                        ([('7.15', '>=')], 'rspan-ingress-vlan-id', KeyInfo()),
+                        ([('7.15', '>=')], 'switch-all-ports', KeyInfo()),
+                    ],
+                    fields={
+                        'cpu-flow-control': KeyInfo(default=True),
+                        'mirror-source': KeyInfo(default='none'),
+                        'mirror-target': KeyInfo(default='none'),
+                        'name': KeyInfo(),
+                    },
+                ),
+            ),
+        },
     ),
 
     ('interface', 'ethernet', 'switch', 'acl'): APIData(
@@ -2840,37 +2924,46 @@ PATHS = {
         ),
     ),
 
-    # CRS112 (so probably all CRS1xx/2xx) have no fixed port-isolation entries;
-    # other devices have those as fixed_entries
     ('interface', 'ethernet', 'switch', 'port-isolation'): APIData(
-        versioned=[
-            ('6.43', '>=', VersionedAPIData(
-                # fixed_entries=True,
-                # primary_keys=('name',),
-                fully_understood=True,
-                versioned_fields=[
-                    ([('7.15.2', '>=')], 'comment', KeyInfo()),
-                    # ([('7.15.2', '>=')], 'copy-from', KeyInfo(write_only=True)),
-                    ([('7.15.2', '>=')], 'disabled', KeyInfo()),
-                    ([('7.15.2', '>=')], 'flow-id', KeyInfo()),
-                    ([('7.15.2', '>=')], 'forwarding-type', KeyInfo()),
-                    ([('7.15.2', '>=')], 'mac-profile', KeyInfo()),
-                    ([('7.15', '>=')], 'numbers', KeyInfo()),
-                    # ([('7.15.2', '>=')], 'place-before', KeyInfo(write_only=True)),
-                    ([('7.15.2', '>=')], 'port-profile', KeyInfo()),
-                    ([('7.15.2', '>=')], 'ports', KeyInfo()),
-                    ([('7.15.2', '>=')], 'protocol-type', KeyInfo()),
-                    ([('7.15.2', '>=')], 'registration-status', KeyInfo()),
-                    ([('7.15.2', '>=')], 'traffic-type', KeyInfo()),
-                    ([('7.15.2', '>=')], 'type', KeyInfo()),
-                    ([('7.15.2', '>=')], 'vlan-profile', KeyInfo()),
+        hardware_detect='switch_chip_type',
+        hardware_variants={
+            'single_entry_switch': APIData(
+                versioned=[
+                    ('7.15', '>=', VersionedAPIData(
+                        fully_understood=True,
+                        fields={
+                            'comment': KeyInfo(),
+                            # 'copy-from': KeyInfo(write_only=True),
+                            'disabled': KeyInfo(),
+                            'flow-id': KeyInfo(),
+                            'forwarding-type': KeyInfo(),
+                            'mac-profile': KeyInfo(),
+                            # 'place-before': KeyInfo(write_only=True),
+                            'port-profile': KeyInfo(),
+                            'ports': KeyInfo(),
+                            'protocol-type': KeyInfo(),
+                            'registration-status': KeyInfo(),
+                            'traffic-type': KeyInfo(),
+                            'type': KeyInfo(),
+                            'vlan-profile': KeyInfo(),
+                        },
+                    )),
                 ],
-                fields={
-                    'forwarding-override': KeyInfo(can_disable=True),
-                    'name': KeyInfo(),
-                },
-            )),
-        ],
+            ),
+            'multi_entry_switch': APIData(
+                versioned=[
+                    ('6.43', '>=', VersionedAPIData(
+                        fixed_entries=True,
+                        fully_understood=True,
+                        primary_keys=('name', ),
+                        fields={
+                            'forwarding-override': KeyInfo(),
+                            'name': KeyInfo(),
+                        },
+                    )),
+                ],
+            ),
+        },
     ),
 
     ('interface', 'ethernet', 'switch', 'port-leakage'): APIData(

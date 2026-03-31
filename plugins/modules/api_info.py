@@ -664,6 +664,10 @@ from ansible_collections.community.routeros.plugins.module_utils._api_helper imp
     validate_and_prepare_restrict,
 )
 
+from ansible_collections.community.routeros.plugins.module_utils._hardware_detect import (
+    get_cached_or_detect,
+)
+
 try:
     from librouteros.exceptions import LibRouterosError
 except Exception:
@@ -703,6 +707,13 @@ def main():
     versioned_path_info = PATHS.get(tuple(path))
     if versioned_path_info is None:
         module.fail_json(msg='Path /{path} is not yet supported'.format(path='/'.join(path)))
+    if versioned_path_info.hardware_detect:
+        hardware_variant_key = get_cached_or_detect(versioned_path_info.hardware_detect, api)
+        if hardware_variant_key not in versioned_path_info.hardware_variants:
+            module.fail_json(
+                msg='Path /{path} is not supported for detected hardware variant {variant}'.format(
+                    path='/'.join(path), variant=hardware_variant_key))
+        versioned_path_info = versioned_path_info.hardware_variants[hardware_variant_key]
     if versioned_path_info.needs_version:
         api_version = get_api_version(api)
         supported, not_supported_msg = versioned_path_info.provide_version(api_version)

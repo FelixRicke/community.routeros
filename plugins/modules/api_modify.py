@@ -701,6 +701,10 @@ from ansible_collections.community.routeros.plugins.module_utils._api_helper imp
     value_to_str,
 )
 
+from ansible_collections.community.routeros.plugins.module_utils._hardware_detect import (
+    get_cached_or_detect,
+)
+
 HAS_ORDEREDDICT = True
 try:
     from collections import OrderedDict
@@ -1441,6 +1445,9 @@ def has_backend(versioned_path_info):
     if not versioned_path_info.fully_understood:
         return False
 
+    if versioned_path_info.hardware_variants is not None:
+        return any(has_backend(v) for v in versioned_path_info.hardware_variants.values())
+
     if versioned_path_info.unversioned is not None:
         return get_backend(versioned_path_info.unversioned) is not None
 
@@ -1482,6 +1489,15 @@ def main():
 
     path = split_path(module.params['path'])
     versioned_path_info = PATHS.get(tuple(path))
+
+    if versioned_path_info.hardware_detect:
+        hardware_variant_key = get_cached_or_detect(versioned_path_info.hardware_detect, api)
+        if hardware_variant_key not in versioned_path_info.hardware_variants:
+            module.fail_json(
+                msg='Path /{path} is not supported for detected hardware variant {variant}'.format(
+                    path='/'.join(path), variant=hardware_variant_key))
+        versioned_path_info = versioned_path_info.hardware_variants[hardware_variant_key]
+
     if versioned_path_info.needs_version:
         api_version = get_api_version(api)
         supported, not_supported_msg = versioned_path_info.provide_version(api_version)
