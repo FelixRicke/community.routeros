@@ -222,5 +222,31 @@ def detect_switch_chip_type(api):
 #
 # See Also: _api_data.py: HARDWARE_DETECTOR_KEYS, APIData class
 HARDWARE_DETECTORS = {
+    """Registry of hardware detector functions.
+
+    This dictionary maps detector names to their implementation functions.
+    Each detector is a callable that:
+
+    1. Takes an API connection object as input
+    2. Queries the device for hardware-specific information
+    3. Returns a string variant key identifying the hardware type
+
+    Available Detectors
+    -------------------
+    - ``switch_chip_type``: Detects switch chip semantics (single vs multi-entry)
+      Used for paths that behave differently on CRS1xx/2xx vs CRS3xx/5xx devices.
+
+    Registration
+    ------------
+    To add a new detector:
+    1. Implement the detector function following the pattern above
+    2. Add an entry to this dictionary with a unique name
+    3. Add the name to ``HARDWARE_DETECTOR_KEYS`` in ``_api_data.py``
+    4. Use the detector name in ``APIData(hardware_detect='...')``
+
+    See Also
+    --------
+    _api_data.py: HARDWARE_DETECTOR_KEYS, APIData class
+    """
     'switch_chip_type': detect_switch_chip_type,
 }
