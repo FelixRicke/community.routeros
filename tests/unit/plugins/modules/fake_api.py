@@ -12,6 +12,32 @@ from ansible_collections.community.routeros.plugins.module_utils._api_data impor
 FAKE_ROS_VERSION = '7.5.0'
 
 
+# Version simulation support
+VERSIONED_PATH_DATA = {
+    # Example: path -> {version -> data}
+    # This allows testing versioned_fields behavior
+}
+
+
+def create_version_aware_fake(version='7.5.0'):
+    """Create a fake ROS API instance aware of a specific version.
+
+    Args:
+        version: RouterOS version string (e.g., '7.5.0', '7.15.1')
+
+    Returns:
+        Class configured for the specified version
+    """
+    class VersionAwareFakeROSAPI(fake_ros_api):
+        CURRENT_VERSION = version
+
+        @classmethod
+        def get_version(cls):
+            return cls.CURRENT_VERSION
+
+    return VersionAwareFakeROSAPI
+
+
 class FakeLibRouterosError(Exception):
     def __init__(self, message):
         self.message = message
@@ -248,7 +274,7 @@ class Path(object):
                 raise ValueError('Trying to update unknown field "{field}"'.format(field=field))
             field_info = self._path_info.fields[field]
             if field_info.read_only:
-                raise ValueError('Trying to update read-only field "{field}"'.format(field=field))
+                raise ValueError('Trying to set read-only field "{field}"'.format(field=field))
         entry.update(kwargs)
         _normalize_entry(entry, self._path_info)
 
@@ -259,7 +285,7 @@ class Path(object):
             raise FakeLibRouterosError('Unsupported command "%s"' % command)
         if self._path_info.fixed_entries or self._path_info.single_value:
             raise Exception('Cannot move entries')
-        yield None  # make sure that nothing happens if the result isn't consumed
+        yield None  # make sure that the result isn't consumed
         source_index = self._find_id(kwargs.pop('numbers'), required=True)
         entry = self._values.pop(source_index)
         dest_index = self._find_id(kwargs.pop('destination'), required=True)
