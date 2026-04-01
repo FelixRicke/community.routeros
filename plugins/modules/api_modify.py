@@ -745,6 +745,14 @@ except Exception:
 
 
 def compose_api_path(api, path):
+    """Build the RouterOS API path from a tuple of path components.
+
+    Takes a path tuple like `('ip', 'address')` and builds the corresponding
+    API path object by sequentially joining each component.
+
+    Example:
+        path = ('ip', 'address') -> /ip/address
+    """
     api_path = api.path()
     for p in path:
         api_path = api_path.join(p)
@@ -752,6 +760,32 @@ def compose_api_path(api, path):
 
 
 def find_modifications(old_entry, new_entry, path_info, module, for_text='', return_none_instead_of_fail=False):
+    """Compare old and new entries to find modifications needed.
+
+    This function performs the core diff detection logic for api_modify:
+
+    **Argument preparation:**
+    - Initialize modifications dict (OrderedDict for consistent ordering)
+    - Create working copy of old_entry for tracking changes
+
+    **Diff detection loop (new_entry keys):**
+    - Skip `.id` (managed separately by primary key logic)
+    - Handle disabled keys (prefix `!` or None value)
+    - Skip keys with default values (no change needed)
+    - Skip read-only keys (validated elsewhere, just check consistency)
+    - Skip write-only keys on update (when handle_write_only='create_only')
+    - Detect actual value changes and record modifications
+
+    **Handle remaining keys in old_entry:**
+    - When handle_entries_content is 'remove' or 'remove_as_much_as_possible':
+      - Disable keys with defaults/absent values (set to default or `!key=`)
+      - Fail or return None for keys that cannot be removed
+
+    **Handle missing optional fields:**
+    - Add default values for keys that can_disable and have defaults
+
+    Returns tuple of (modifications dict, updated_entry dict).
+    """
     modifications = OrderedDict()
     updated_entry = old_entry.copy()
     for k, v in new_entry.items():
@@ -1448,6 +1482,24 @@ def sync_single_value(module, api, path, path_info, restrict_data):
 
 
 def get_backend(path_info):
+    """Select the appropriate backend sync function for the given path.
+
+    Backend selection logic:
+
+    1. **sync_with_primary_keys** - Used when entries have unique identifier
+       fields (primary_keys defined). Enables targeted add/modify/remove
+       operations based on primary key matching.
+
+    2. **sync_single_value** - Used for paths with exactly one entry
+       (single_value=True). Typical for settings/configuration paths.
+
+    3. **sync_list** - Used for simple list-based paths without primary keys
+       and where modification is supported (has_identifier=False,
+       modify_not_supported=False).
+
+    Returns None if the path is not fully understood or doesn't support
+    modification operations.
+    """
     if path_info is None:
         return None
     if not path_info.fully_understood:
@@ -1484,6 +1536,38 @@ def has_backend(versioned_path_info):
 
 
 def main():
+    """Module execution flow:
+
+    1. **Build argument specification:**
+       - Dynamic path choices from PATHS registry (only paths with backends)
+       - Common API connection arguments (hostname, username, password, etc.)
+       - Restrict filter argument spec
+
+    2. **Create AnsibleModule:**
+       - Supports check_mode for dry-run testing
+       - Validates parameter constraints (ensure_order requires handle_absent_entries=remove)
+
+    3. **Initialize API connection:**
+       - Verify librouteros is installed
+       - Create API connection to RouterOS device
+
+    4. **Resolve path information:**
+       - Look up path in PATHS registry
+       - Hardware variant detection (if required by path)
+       - API version checking (if required by path)
+       - Select hardware variant or fail if unsupported
+
+    5. **Select backend:**
+       - Call get_backend() to choose sync function
+       - Fail if no backend available for path
+
+    6. **Validate restrict criteria:**
+       - Validate restrict filters against path schema
+
+    7. **Delegate to backend:**
+       - sync_with_primary_keys, sync_single_value, or sync_list
+       - Handles actual add/modify/remove operations
+    """
     path_choices = sorted([join_path(path) for path, versioned_path_info in PATHS.items() if has_backend(versioned_path_info)])
     module_args = dict(
         path=dict(type='str', required=True, choices=path_choices),

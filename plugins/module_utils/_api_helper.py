@@ -13,8 +13,71 @@ import re
 
 from ansible.module_utils.common.text.converters import to_text
 
+"""
+Helper functions for the MikroTik RouterOS collection's API layer.
+
+This module provides utility functions used across plugins to handle:
+
+- Value conversion: ``value_to_str`` converts Python values to their
+  string representations as expected by the RouterOS API, with special
+  handling for boolean values (true/false vs yes/no).
+
+- Restrict filter handling: ``validate_and_prepare_restrict`` validates
+  and prepares restrict filter rules from module parameters.
+  ``restrict_entry_accepted`` evaluates whether a RouterOS entry matches
+  the configured restrict filters.
+
+- Value sanitization: ``apply_value_sanitizer`` applies registered value
+  sanitizers to normalize field values before API operations.
+"""
+
 
 def value_to_str(value, compat_bool=False, none_to_empty=False):
+    """Convert a Python value to its string representation for RouterOS API.
+
+    Boolean values are converted to either ``true``/``false`` or ``yes``/``no``
+    depending on the ``compat_bool`` flag:
+
+    - ``compat_bool=False`` (default): Returns ``'yes'`` for ``True``,
+      ``'no'`` for ``False`` (Ansible-style).
+    - ``compat_bool=True``: Returns ``'true'`` for ``True``, ``'false'``
+      for ``False`` (RouterOS API style).
+
+    Examples
+    --------
+    >>> value_to_str(True)
+    'yes'
+    >>> value_to_str(False)
+    'no'
+    >>> value_to_str(True, compat_bool=True)
+    'true'
+    >>> value_to_str(False, compat_bool=True)
+    'false'
+    >>> value_to_str(None)
+    None
+    >>> value_to_str(None, none_to_empty=True)
+    ''
+    >>> value_to_str('hello')
+    'hello'
+
+    Parameters
+    ----------
+    value : any
+        The value to convert. ``None``, ``True``, and ``False`` are handled
+        specially; all other values are converted using ``to_text``.
+    compat_bool : bool, optional
+        If ``True``, use RouterOS API boolean format (``true``/``false``).
+        If ``False``, use Ansible-style format (``yes``/``no``).
+    none_to_empty : bool, optional
+        If ``True`` and value is ``None``, return empty string ``''``.
+        If ``False`` (default), return ``None`` unchanged.
+
+    Returns
+    -------
+    str or None
+        The string representation, or ``None`` if the input was ``None``
+        and ``none_to_empty=False``.
+    """
     if value is None:
         return '' if none_to_empty else None
     if value is True:
@@ -25,6 +88,68 @@ def value_to_str(value, compat_bool=False, none_to_empty=False):
 
 
 def validate_and_prepare_restrict(module, path_info, compat=True):
+    """Validate and compile restrict filter rules from module parameters.
+
+    Module Integration Contract
+    ---------------------------
+    This function is called by Ansible plugins that support the ``restrict``
+    parameter. It expects:
+
+    **Input requirements:**
+    - ``module.params['restrict']``: A list of restrict rule dictionaries, or
+      ``None`` if the parameter was not specified.
+    - Each rule dictionary must contain:
+      - ``field``: Field name (string, must exist in ``path_info.fields``)
+      - ``match_disabled``: Boolean for handling ``None`` values
+      - ``invert``: Boolean to negate the match result
+      - ``values``: List of values to match, or ``None``
+      - ``regex``: Regular expression string, or ``None``
+
+    **Processing:**
+    1. Validates that each field exists in ``path_info.fields``.
+    2. Ensures field names do not start with ``!`` (use ``invert`` instead).
+    3. Compiles ``regex`` patterns, failing on invalid expressions.
+    4. Converts ``values`` to strings if ``compat=False``.
+
+    **Output:**
+    Returns a list of compiled rules with:
+    - ``field``: Field name (string)
+    - ``match_disabled``: Boolean
+    - ``invert``: Boolean
+    - ``values``: List of string values, or absent if ``None``
+    - ``regex``: Compiled regex pattern, or absent if ``None``
+    - ``regex_source``: Original regex string (only if regex present)
+
+    Parameters
+    ----------
+    module : AnsibleModule
+        The Ansible module instance. ``module.params['restrict']`` is read,
+        and ``module.fail_json`` is called on validation errors.
+    path_info : PathInfo
+        Metadata object containing field definitions. Used to validate that
+        all referenced fields exist for the current API path.
+    compat : bool, optional
+        If ``True``, keep ``values`` as raw values (legacy behavior).
+        If ``False``, convert all values to strings using ``value_to_str``.
+
+    Returns
+    -------
+    list or None
+        List of compiled restrict rules, or ``None`` if ``restrict`` parameter
+        was not specified.
+
+    Raises
+    ------
+    module.fail_json
+        Called if a field does not exist, field name starts with ``!``, or
+        regex compilation fails.
+
+    See Also
+    --------
+    restrict_entry_accepted : Evaluate entries against compiled rules
+    value_to_str : Convert values to string representation
+    restrict_argument_spec : Argument spec definition for restrict parameter
+    """
     restrict = module.params['restrict']
     if restrict is None:
         return None
@@ -71,6 +196,57 @@ def _test_rule_except_invert(value, rule, compat=False):
 
 
 def restrict_entry_accepted(entry, path_info, restrict_data, compat=True):
+    """Evaluate whether a RouterOS entry passes all restrict filter rules.
+
+    This function implements the filter evaluation flow for the ``restrict``
+    parameter used across collection plugins to limit which RouterOS entries
+    are returned or processed.
+
+    Filter Evaluation Flow
+    ----------------------
+    1. **No filters**: If ``restrict_data`` is ``None``, the entry is accepted.
+
+    2. **Per-rule evaluation**: For each rule in ``restrict_data``:
+       a. Resolve the field value from the entry, falling back to the
+          field's default or absent value if not present.
+       b. Test the value against the rule using ``_test_rule_except_invert``:
+          - Match against ``values`` list if specified
+          - Match against ``regex`` pattern if specified
+          - Handle ``match_disabled`` for ``None`` values
+       c. Apply ``invert`` flag if set (negate the match result).
+       d. If the (possibly inverted) result is ``False``, the entry is rejected.
+
+    3. **Result**: If all rules pass (or there are no rules), the entry is accepted.
+
+    A field must satisfy ALL restrict rules to be accepted (logical AND across
+    rules). Within a single rule, matching any ``values`` entry or the ``regex``
+    pattern constitutes a match (logical OR).
+
+    Parameters
+    ----------
+    entry : dict
+        The RouterOS API entry (dictionary of field name to value).
+    path_info : PathInfo
+        Metadata object containing field definitions with default and absent
+        values for value resolution.
+    restrict_data : list or None
+        List of compiled restrict rules from ``validate_and_prepare_restrict``,
+        or ``None`` if no filters were specified (accepts all entries).
+    compat : bool, optional
+        If ``True``, use compatibility mode for value comparison (raw values).
+        If ``False``, convert values to strings before comparison.
+
+    Returns
+    -------
+    bool
+        ``True`` if the entry passes all restrict filters (or no filters),
+        ``False`` if any rule rejects the entry.
+
+    See Also
+    --------
+    validate_and_prepare_restrict : Validate and compile restrict rules
+    _test_rule_except_invert : Test a single value against a rule
+    """
     if restrict_data is None:
         return True
     for rule in restrict_data:

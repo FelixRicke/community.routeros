@@ -6,6 +6,53 @@
 # The data inside here is private to this collection. If you use this from outside the collection,
 # you are on your own. There can be random changes to its format even in bugfix releases!
 
+"""
+RouterOS API Data Layer for the community.routeros collection.
+
+This module provides the core data structures used by the RouterOS collection to describe
+and interact with RouterOS API endpoints. It defines the schema for API paths, their fields,
+and associated metadata.
+
+Data Layer Role:
+----------------
+This module serves as the authoritative source of information about RouterOS API structures
+within the collection. It is used by:
+
+- ``api_read.py``: To understand what fields can be read from each API path
+- ``api_modify.py``: To understand what fields can be modified and how to construct API calls
+- Module implementations: To validate parameters and map between Ansible and RouterOS
+
+Key Components:
+---------------
+- ``APIData``: Container for API path data, supporting versioned and hardware-specific variants
+- ``VersionedAPIData``: Represents API path data for specific RouterOS version ranges
+- ``KeyInfo``: Metadata describing individual API fields (defaults, read-only, etc.)
+- ``PATHS``: Central registry mapping API path tuples to their data structures
+
+Version Handling:
+-----------------
+The data layer supports different API structures across RouterOS versions through:
+
+- ``unversioned``: Data that applies to all RouterOS versions
+- ``versioned``: List of version-specific data with version constraints
+- ``versioned_fields``: Individual fields that appear only in certain versions
+
+Hardware Detection:
+-------------------
+For certain API paths, the structure depends on the hardware type (e.g., switch chips).
+The ``hardware_detect`` and ``hardware_variants`` parameters allow defining different
+data structures for different hardware types.
+
+Value Sanitization:
+-------------------
+Value sanitizers normalize user-supplied field values to match RouterOS's internal format.
+Sanitizers are registered on ``KeyInfo`` instances and are applied before comparisons
+or API calls to ensure idempotency.
+
+.. note:: This module is internal to the collection. Its API may change without
+          notice in bugfix releases. Use at your own risk.
+"""
+
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
@@ -91,6 +138,102 @@ class Depr(object):
 
 
 class APIData(object):
+    """Container for API path data with version and hardware support.
+
+    This class represents the complete data structure for a single API path,
+    supporting different data definitions based on RouterOS version and hardware type.
+    It serves as the top-level container that delegates to either versioned or
+    hardware-specific data structures.
+
+    Constructor Parameters:
+    -----------------------
+    unversioned : VersionedAPIData, optional
+        Data that applies to all RouterOS versions. Use when the API path
+        structure is stable across all supported versions. Mutually exclusive
+        with ``versioned`` and ``hardware_variants``.
+    versioned : list of (str, str, VersionedAPIData), optional
+        List of version-specific data definitions. Each tuple contains:
+
+        * Version string (e.g., ``"7.22"``)
+        * Comparator (``"=="``, ``"!="``, ``"<"``, ``"<="``, ``">"``, ``">="``)
+        * ``VersionedAPIData`` instance for matching versions
+
+        The first matching entry is used. Supports ``("*", "*", data)`` for
+        catch-all fallback. Mutually exclusive with ``unversioned`` and
+        ``hardware_variants``.
+    hardware_detect : str, optional
+        Name of the hardware detection strategy to use when selecting among
+        hardware variants. Required when ``hardware_variants`` is specified.
+    hardware_variants : dict, optional
+        Dictionary mapping hardware variant keys (e.g., ``"switch_chip_type"``)
+        to ``APIData`` instances. Each variant should define the structure for
+        that specific hardware type. Cannot be combined with ``unversioned`` or
+        ``versioned``. Nested hardware variants are not supported.
+
+    Validation Logic:
+    -----------------
+    The constructor enforces the following constraints:
+
+    * Exactly one of ``unversioned``, ``versioned``, or ``hardware_variants`` must
+      be provided (when not using hardware variants, exactly one of ``unversioned``
+      or ``versioned`` is required).
+    * When ``hardware_variants`` is specified, ``hardware_detect`` is required.
+    * Individual hardware variant entries must be ``APIData`` instances.
+    * Hardware variants cannot be nested (variant's ``hardware_variants`` must be None).
+
+    Derived Properties:
+    -------------------
+    After construction, the following properties are automatically computed:
+
+    fully_understood : bool
+        ``True`` when all fields in the API path are documented and understood.
+        For hardware variants, ``True`` if ANY variant is fully understood.
+        For versioned data, ``True`` if ANY version is fully understood.
+        For unversioned data, inherited directly from the unversioned data.
+
+    needs_version : bool
+        ``True`` when version-specific field handling is required.
+        ``False`` for unversioned data without versioned fields.
+        ``True`` when any ``versioned_fields`` are defined.
+        For hardware variants, ``True`` if ANY variant needs_version.
+
+    has_identifier : bool
+        ``True`` when entries in this API path have a unique identifier
+        (like ``.id`` MAC address, or name key). Used to determine how
+        entries are referenced in API calls. For hardware variants, ``True``
+        if ANY variant has_identifier.
+
+    modify_not_supported : bool
+        ``True`` when the API path does not support modification operations.
+        This may indicate a read-only endpoint or one that only supports
+        creation/deletion.
+
+    Example Usage:
+    --------------
+    .. code-block:: python
+
+        # Simple unversioned path
+        APIData(unversioned=VersionedAPIData(
+            fully_understood=True,
+            fields={'name': KeyInfo(), 'disabled': KeyInfo()}
+        ))
+
+        # Versioned path with fallback
+        APIData(versioned=[
+            ('7.22', '>=', VersionedAPIData(...)),
+            ('7.0', '>=', VersionedAPIData(...)),
+        ])
+
+        # Hardware-specific path
+        APIData(
+            hardware_detect='switch_chip_type',
+            hardware_variants={
+                'micrel': APIData(unversioned=...),
+                'rtl8367': APIData(unversioned=...),
+            }
+        )
+    """
+
     def __init__(self,
                  unversioned=None,
                  versioned=None,
@@ -196,6 +339,109 @@ class APIData(object):
 
 
 class VersionedAPIData(object):
+    """API path data for a specific RouterOS version range.
+
+    This class represents the structure of an API path for a particular version
+    or range of RouterOS versions. It defines the fields available, their metadata,
+    and constraints on how entries can be identified and manipulated.
+
+    Version Tuples Structure:
+    -------------------------
+    When used within ``APIData.versioned``, each entry is a tuple of:
+
+    ``(version_string, comparator, VersionedAPIData)``
+
+    Where:
+    - ``version_string``: A semantic version string (e.g., ``"7.22"``, ``"7.0"``)
+    - ``comparator``: One of ``"=="``, ``"!="``, ``"<"``, ``"<="``, ``">"``, ``">="``
+    - The ``LooseVersion`` class is used for version comparison
+
+    Example version tuple:
+    .. code-block:: python
+
+        ('7.22', '>=', VersionedAPIData(fields={...}))
+
+    Unversioned Fallback:
+    ---------------------
+    When an ``APIData`` is constructed with ``unversioned=VersionedAPIData(...)``,
+    this data applies to all RouterOS versions. No version matching is performed,
+    and the structure is assumed stable across all supported versions.
+
+    For versioned data, if no version matches the running RouterOS version,
+    ``provide_version()`` returns ``False, None`` and the path cannot be used.
+
+    Field Definitions:
+    ------------------
+    The following parameters define the structure and constraints of API entries:
+
+    primary_keys : list of str, optional
+        Fields that uniquely identify entries in this API path. These are the
+        fields used to locate, update, or delete specific entries. Common examples
+        include ``".id"``, ``"name"``, or ``"mac-address"``. Mutually exclusive
+        with ``stratify_keys``, ``has_identifier``, ``single_value``, and
+        ``unknown_mechanism``.
+
+    stratify_keys : list of str, optional
+        Fields used to categorize or group entries without being the primary
+        identifier. Used for hierarchical API structures where entries belong
+        to categories. Mutually exclusive with ``primary_keys``.
+
+    required_one_of : list of list of str, optional
+        Groups of fields where at least one field from each group must be
+        provided when creating or modifying entries. Each inner list is a
+        set of alternative fields. Default is empty list (no requirements).
+
+    mutually_exclusive : list of list of str, optional
+        Groups of fields that cannot be used together. Each inner list is a
+        set of fields where at most one can be specified. Default is empty
+        list (no exclusions).
+
+    has_identifier : bool, default False
+        When ``True``, entries have a unique identifier but it is not a fixed
+        field name (e.g., the identifier might be ``".id"``, ``"name"``, or
+        another field depending on the entry). Used when primary keys cannot
+        be statically determined. Mutually exclusive with ``primary_keys``.
+
+    modify_not_supported : bool, default False
+        When ``True``, the API path does not support modification operations.
+        Entries may be creatable and deletable, but cannot be updated.
+
+    single_value : bool, default False
+        When ``True``, only a single entry exists for this API path (e.g.,
+        global settings). Implies ``fixed_entries=True`` since there is
+        only one value.
+
+    unknown_mechanism : bool, default False
+        When ``True``, the internal mechanism of this API path is not fully
+        understood. Cannot be combined with ``fully_understood=True``. Used
+        as a placeholder for API paths that need further investigation.
+
+    fully_understood : bool, default False
+        When ``True``, all fields in this API path are documented and
+        understood. This enables full validation and idempotency checks.
+        When ``False``, only basic operations are supported.
+
+    fixed_entries : bool, default False
+        When ``True``, the set of entries cannot be modified (no add/remove).
+        Entries may still have modifiable fields. Only valid when
+        ``primary_keys`` is specified.
+
+    fields : dict of str to KeyInfo, required
+        Dictionary mapping field names to their ``KeyInfo`` metadata.
+        Defines all available fields for this API path.
+
+    versioned_fields : list of (conditions, str, KeyInfo), optional
+        List of fields that appear only under specific version conditions.
+        Each entry is a tuple of:
+
+        * ``conditions``: List of ``(version_string, comparator)`` tuples
+        * ``name``: Field name
+        * ``field``: ``KeyInfo`` instance
+
+        The field is added when ALL conditions in the list match the
+        current RouterOS version. Default is empty list.
+    """
+
     def __init__(self,
                  primary_keys=None,
                  stratify_keys=None,
@@ -296,6 +542,107 @@ class VersionedAPIData(object):
 
 
 class KeyInfo(object):
+    """Metadata describing a single API field.
+
+    This class defines the properties and constraints of an individual field
+    within an API path. It controls how fields are validated, displayed,
+    and manipulated by the RouterOS collection modules.
+
+    Field Metadata:
+    ---------------
+    The following parameters define the field's behavior and constraints:
+
+    can_disable : bool, default False
+        When ``True``, the field can be enabled or disabled. In RouterOS CLI,
+        such fields are marked with a ``!`` prefix when disabled. When
+        disabled, the field's value is typically ignored by the system.
+
+    remove_value : any, optional
+        The value that effectively removes or disables the field. When this
+        value is set, the field behaves as if it were disabled. Only valid
+        when ``can_disable=True``.
+
+    absent_value : any, optional
+        The value used to represent an absent field. When the field has this
+        value, it is treated as if the field were not set. Cannot be combined
+        with ``default``, ``automatically_computed_from``, or ``can_disable``.
+
+    default : any, optional
+        The default value used when the field is not specified by the user.
+        If the field is not provided and a default exists, this value is
+        assumed. Cannot be combined with ``required=True`` or
+        ``automatically_computed_from``.
+
+    required : bool, default False
+        When ``True``, the field must be provided when creating or modifying
+        entries. Validation will fail if the field is missing. Cannot be
+        combined with ``default`` or ``automatically_computed_from``.
+
+    automatically_computed_from : str, optional
+        The name of another field from which this field's value is automatically
+        computed. When set, the module will not accept user-provided values for
+        this field and will instead derive it from the specified field. Cannot
+        be combined with ``required=True`` or ``default``.
+
+    Default Values:
+    ---------------
+    When ``default`` is specified and ``can_disable=True``, the field can have
+    both a default value and be enabled/disabled. This is the only combination
+    that allows both parameters.
+
+    Read-Only/Write-Only Flags:
+    ---------------------------
+    read_only : bool, default False
+        When ``True``, the field cannot be modified by the user. It is
+        computed or set by RouterOS internally and can only be read.
+        Examples include system-generated IDs, status fields, or computed
+        values. Cannot be combined with ``required``, ``default``,
+        ``can_disable``, ``remove_value``, or ``absent_value``.
+        Cannot be combined with ``write_only=True``.
+
+    write_only : bool, default False
+        When ``True``, the field cannot be read back from RouterOS. This is
+        typically used for sensitive values like passwords that are accepted
+        as input but never returned. Cannot be combined with ``read_only=True``.
+        Value sanitizers cannot be used with write-only fields.
+
+    Value Sanitizers:
+    -----------------
+    value_sanitizer : callable, optional
+        A callable that normalizes user-supplied values to match RouterOS's
+        internal format. The sanitizer should:
+
+        * Be idempotent (applying twice yields the same result)
+        * Pass through unhandled value types unchanged
+        * Return a normalized form of the input
+
+        Example: A sanitizer might prepend ``/`` to paths if missing, convert
+        boolean strings to actual booleans, or normalize MAC address formats.
+
+        Cannot be used with ``read_only`` or ``write_only`` fields, as
+        sanitization is only meaningful when the value is written and then
+        read back for comparison.
+
+    Validation Rules:
+    -----------------
+    The constructor enforces these constraints:
+
+    * Exactly one of ``required``, ``default``/``can_disable``, or
+      ``automatically_computed_from`` may be specified (except ``default``
+      and ``can_disable`` can be combined).
+    * ``remove_value`` requires ``can_disable=True``.
+    * ``absent_value`` cannot be combined with ``default``,
+      ``automatically_computed_from``, or ``can_disable``.
+    * ``read_only`` and ``write_only`` are mutually exclusive.
+    * ``read_only`` cannot be combined with any user-modifiable parameter
+      (``required``, ``default``, ``can_disable``, ``remove_value``,
+      ``absent_value``).
+    * ``value_sanitizer`` must be callable and cannot be used with
+      ``read_only`` or ``write_only``.
+    * The ``_dummy`` parameter exists to prevent positional arguments;
+      all parameters must be keyword arguments.
+    """
+
     def __init__(self,
                  _dummy=None,
                  can_disable=False,
@@ -359,6 +706,85 @@ def join_path(path):
     return ' '.join(path)
 
 
+# ---------------------------------------------------------------------------
+# PATHS dictionary
+# ---------------------------------------------------------------------------
+# This dictionary is the central registry of all API paths known to the
+# collection. Each key maps an API path to its corresponding APIData structure.
+#
+# Key Structure:
+# --------------
+# Keys are tuples of path components that correspond to RouterOS API paths.
+# The tuple elements represent the hierarchical structure of the API path.
+#
+# Examples:
+#   ('interface', 'vlan')       -> /interface vlan
+#   ('ip', 'dhcp-server', 'lease') -> /ip dhcp-server lease
+#   ('system', 'resource')      -> /system resource
+#   ('app',)                    -> /app
+#
+# How to Find Path Definitions:
+# -----------------------------
+# 1. Run `/export verbose` in the RouterOS CLI to see all configuration
+#    sections and their attributes.
+#
+# 2. The path structure is derived from the nested hierarchy in the export
+#    output. Top-level sections become the first tuple element. Nested
+#    subsections (indicated by indentation or prefix notation) extend the
+#    tuple with additional elements.
+#
+# 3. Alternative: Use the `/print` command in the CLI to list available
+#    paths. For example:
+#       /interface print
+#       /interface vlan print
+#       /ip dhcp-server lease print
+#
+# 4. Cross-reference with RouterOS API documentation or the `api` command
+#    in the CLI to discover hidden or less-documented paths.
+#
+# How to Add New Paths:
+# ---------------------
+# 1. Identify the API path from RouterOS CLI or documentation.
+#
+# 2. Create a tuple key with the path components in order:
+#      ('parent', 'child', 'grandchild') for /parent child grandchild
+#
+# 3. Add an APIData value with appropriate versioned or unversioned data:
+#      - Use `unversioned=` when structure is stable across versions
+#      - Use `versioned=` when structure differs between RouterOS versions
+#      - Use `hardware_variants=` when structure depends on hardware type
+#
+# 4. Define a VersionedAPIData with:
+#      - `fields`: Dictionary of all available attributes
+#      - `primary_keys`: Fields that uniquely identify entries (often ".id")
+#      - `fully_understood`: Set True when all fields are documented
+#      - Other metadata as needed (see VersionedAPIData docstring)
+#
+# 5. For each field, create a KeyInfo with:
+#      - `default`: Default value if field is optional
+#      - `required`: True if field must be provided
+#      - `can_disable`: True if field can be enabled/disabled (! in CLI)
+#      - `read_only`: True if field is system-computed
+#      - `write_only`: True for sensitive values (passwords)
+#      - `value_sanitizer`: For normalizing input values
+#
+# 6. For version-specific fields, use `versioned_fields`:
+#      [
+#          ([('7.22', '>=')], 'new_field', KeyInfo()),
+#      ]
+#
+# 7. Verify the path works by testing with `/print` in the CLI and
+#   8. running the corresponding Ansible module.
+#
+# Data Extraction Notes:
+# ----------------------
+# - All attributes from `/export verbose` go into the `fields` list
+# - Attributes with `!` prefix in CLI should have `can_disable=True`
+# - Bold/primary attributes typically go into `primary_keys` (verify per path!)
+# - Some paths have fixed entries (cannot add/remove) - use `fixed_entries=True`
+# - Some paths are read-only or single-value - set appropriate flags
+# ---------------------------------------------------------------------------
+#
 # How to obtain this information:
 # 1. Run `/export verbose` in the CLI;
 # 2. All attributes listed there go into the `fields` list;
