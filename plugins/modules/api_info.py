@@ -683,6 +683,13 @@ def compose_api_path(api, path):
 
 
 def main():
+    """
+    Main entry point for the api_info module.
+
+    This module retrieves information from a RouterOS API path and returns
+    normalized data. It handles filtering of dynamic/builtin entries,
+    applies restrictions, and normalizes the output based on various options.
+    """
     module_args = dict(
         path=dict(type='str', required=True, choices=sorted([join_path(path) for path in PATHS if PATHS[path].fully_understood])),
         unfiltered=dict(type='bool', default=False),
@@ -735,15 +742,20 @@ def main():
 
         result = []
         unfiltered = module.params['unfiltered']
+        # Main loop: fetch and process each entry from the API
         for entry in api_path:
+            # Filter out dynamic entries if not requested
             if not include_dynamic:
                 if entry.get('dynamic', False):
                     continue
+            # Filter out builtin entries if not requested
             if not include_builtin:
                 if entry.get('builtin', False):
                     continue
+            # Apply restriction filters
             if not restrict_entry_accepted(entry, path_info, restrict_data):
                 continue
+            # Remove fields not in path_info.fields when not unfiltered
             if not unfiltered:
                 for k in list(entry):
                     if k == '.id':
@@ -754,6 +766,10 @@ def main():
                         continue
                     if k not in path_info.fields:
                         entry.pop(k)
+            # Handle disabled/missing values based on handle_disabled option
+            # - 'exclamation': prefix key with '!' and set value to None
+            # - 'null-value': set key to None without prefix
+            # - 'omit': skip adding missing keys (handled by not entering this block)
             if handle_disabled != 'omit':
                 for k, field_info in path_info.fields.items():
                     if field_info.write_only:
@@ -763,12 +779,16 @@ def main():
                         if handle_disabled == 'exclamation':
                             k = '!%s' % k
                         entry[k] = None
+            # Final normalization: handle defaults and read-only fields
             for k, field_info in path_info.fields.items():
+                # Remove fields with default values if hide_defaults is enabled
                 if hide_defaults:
                     if field_info.default is not None and entry.get(k) == field_info.default:
                         entry.pop(k)
+                # Set absent_value for missing fields that specify one
                 if field_info.absent_value and k not in entry:
                     entry[k] = field_info.absent_value
+                # Remove read-only fields if not requested
                 if not include_read_only and k in entry and field_info.read_only:
                     entry.pop(k)
             result.append(entry)
