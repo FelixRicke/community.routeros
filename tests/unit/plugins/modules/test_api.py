@@ -9,7 +9,7 @@ __metaclass__ = type
 from ansible_collections.community.internal_test_tools.tests.unit.compat.mock import patch, MagicMock
 from ansible_collections.community.internal_test_tools.tests.unit.plugins.modules.utils import set_module_args, AnsibleExitJson, AnsibleFailJson, ModuleTestCase
 
-from ansible_collections.community.routeros.tests.unit.plugins.modules.fake_api import FakeLibRouterosError, Key, Or, fake_ros_api
+from ansible_collections.community.routeros.tests.unit.plugins.modules.fake_api import FakeLibRouterosError, TrapError, Key, Or, fake_ros_api
 from ansible_collections.community.routeros.plugins.modules import api
 
 
@@ -307,3 +307,120 @@ class TestRouterosApiModule(ModuleTestCase):
         self.assertEqual(result['msg'], [
             {'.id': '*A1', 'name': 'dummy_bridge_A1'},
         ])
+
+    # --- Coverage improvement tests ---
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api.ROS_api_module.api_add_path', new=fake_ros_api.select_where)
+    def test_check_query_invalid_where_syntax(self):
+        """WHERE with no valid condition -> invalid syntax error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['query'] = ".id name WHERE "
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('invalid syntax', result['msg'][0])
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api.ROS_api_module.api_add_path', new=fake_ros_api.select_where)
+    def test_check_query_where_parse_error(self):
+        """WHERE with unparseable value -> parse error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            module_args = self.config_module_args.copy()
+            # A value with an opening quote but no closing quote triggers ParseError
+            module_args['query'] = '.id name WHERE name == "unclosed'
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+
+    def test_extended_query_in_not_list(self):
+        """extended_query with 'in' operator and non-list value -> error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['extended_query'] = {
+                'attributes': ['.id', 'name'],
+                'where': [
+                    {
+                        'attribute': 'name',
+                        'is': 'in',
+                        'value': 'not_a_list',
+                    },
+                ],
+            }
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn("must be a type list", result['msg'][0])
+
+    def test_extended_query_or_too_few_items(self):
+        """extended_query 'or' with only one item -> error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['extended_query'] = {
+                'attributes': ['.id', 'name'],
+                'where': [
+                    {
+                        'or': [
+                            {
+                                'attribute': 'name',
+                                'is': '==',
+                                'value': 'test',
+                            },
+                        ],
+                    },
+                ],
+            }
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn("minimum two items", result['msg'][0])
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api.ROS_api_module.api_add_path', new=fake_ros_api)
+    def test_api_update_missing_id(self):
+        """update command without .id -> error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['update'] = "name=unit_test_brige"
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn(".id", result['msg'][0])
+
+    def test_api_get_all_librouteros_error(self):
+        """LibRouterosError during api_get_all -> error."""
+        class ErrorPath(object):
+            def __iter__(self):
+                raise FakeLibRouterosError('api path error')
+
+        with self.assertRaises(AnsibleFailJson) as exc:
+            with patch('ansible_collections.community.routeros.plugins.modules.api.ROS_api_module.api_add_path', return_value=ErrorPath()):
+                with set_module_args(self.config_module_args.copy()):
+                    self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('api path error', result['msg'][0])
+
+    def test_unicode_encode_error(self):
+        """UnicodeEncodeError during execution -> error with 'Error while encoding text'."""
+        class UnicodeErrorPath(object):
+            def __iter__(self):
+                raise UnicodeEncodeError('ascii', '', 0, 1, 'ordinal not in range')
+
+        with self.assertRaises(AnsibleFailJson) as exc:
+            with patch('ansible_collections.community.routeros.plugins.modules.api.ROS_api_module.api_add_path', return_value=UnicodeErrorPath()):
+                with set_module_args(self.config_module_args.copy()):
+                    self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('Error while encoding text', result['msg'])

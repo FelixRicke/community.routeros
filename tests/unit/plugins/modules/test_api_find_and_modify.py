@@ -805,3 +805,98 @@ class TestRouterosApiFindAndModifyModule(ModuleTestCase):
         self.assertEqual(result['new_data'], [entry for entry in START_IP_SERVICE_OLD_DATA if entry["dynamic"] is False])
         self.assertEqual(result['match_count'], 1)
         self.assertEqual(result['modify_count'], 0)
+
+    # --- Coverage improvement tests ---
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_find_and_modify.compose_api_path',
+           new=create_fake_path(('ip', 'dns', 'static'), START_IP_DNS_STATIC))
+    def test_values_key_conflict_exclamation_and_plain(self):
+        """values dict with both 'key' and '!key' -> error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'find': {
+                    'name': 'router',
+                },
+                'values': {
+                    'comment': 'new comment',
+                    '!comment': None,
+                },
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_find_and_modify.compose_api_path',
+           new=create_fake_path(('ip', 'dns', 'static'), START_IP_DNS_STATIC))
+    def test_find_key_conflict_exclamation_and_plain(self):
+        """find dict with both 'key' and '!key' -> error."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'find': {
+                    'comment': 'defconf',
+                    '!comment': None,
+                },
+                'values': {
+                    'address': '1.2.3.4',
+                },
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+
+    def test_filter_entries_builtin(self):
+        """Entries with builtin=True are filtered when ignore_builtin=True."""
+        from ansible_collections.community.routeros.plugins.modules.api_find_and_modify import filter_entries
+        entries = [
+            {'.id': '*1', 'name': 'static', 'builtin': False},
+            {'.id': '*2', 'name': 'builtin-entry', 'builtin': True},
+            {'.id': '*3', 'name': 'another-static', 'builtin': False},
+        ]
+        result, has_dynamic, has_builtin = filter_entries(entries, ignore_dynamic=False, ignore_builtin=True)
+        self.assertEqual(len(result), 2)
+        self.assertTrue(has_builtin)
+        self.assertFalse(has_dynamic)
+        names = [e['name'] for e in result]
+        self.assertNotIn('builtin-entry', names)
+
+    def test_update_librouteros_error(self):
+        """LibRouterosError during update -> fail_json."""
+        class ErrorPath:
+            def __init__(self, api, path):
+                self._data = [
+                    {'.id': '*1', 'name': 'router', 'address': '192.168.88.1', 'comment': 'defconf'},
+                ]
+
+            def __iter__(self):
+                return iter(self._data)
+
+            def update(self, **kwargs):
+                raise FakeLibRouterosError('update failed')
+
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'find': {
+                    'name': 'router',
+                },
+                'values': {
+                    'address': '10.0.0.1',
+                },
+            })
+            with patch('ansible_collections.community.routeros.plugins.modules.api_find_and_modify.compose_api_path',
+                        new=ErrorPath):
+                with set_module_args(args):
+                    self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('Error while modifying', result['msg'])

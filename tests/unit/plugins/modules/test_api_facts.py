@@ -6,6 +6,8 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import copy
+
 from ansible_collections.community.internal_test_tools.tests.unit.compat.mock import patch, MagicMock
 from ansible_collections.community.internal_test_tools.tests.unit.plugins.modules.utils import set_module_args, AnsibleExitJson, AnsibleFailJson, ModuleTestCase
 
@@ -751,3 +753,217 @@ class TestRouterosApiFactsModule(ModuleTestCase):
         self.assertEqual(result['ansible_facts']['ansible_net_spacetotal_mb'], 234567890 / 1048576.0)
         self.assertEqual(result['ansible_facts']['ansible_net_uptime'], '2w3d4h5m6s')
         self.assertEqual(result['ansible_facts']['ansible_net_version'], '6.49.6 (stable)')
+
+    # --- Coverage improvement tests ---
+
+    def test_default_empty_system_responses(self):
+        """Empty responses from system paths -> missing facts keys."""
+        empty_responses = copy.deepcopy(API_RESPONSES)
+        empty_responses[('system', 'identity')] = []
+        empty_responses[('system', 'resource')] = []
+        empty_responses[('system', 'routerboard')] = []
+
+        def query_empty(_self, path):
+            response = empty_responses.get(tuple(path))
+            if response is None:
+                raise Exception('Unexpected command: %s' % repr(path))
+            return response
+
+        self.patch_query_path.stop()
+        self.patch_query_path = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.FactsBase.query_path',
+            query_empty)
+        self.patch_query_path.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            with set_module_args(self.config_module_args.copy()):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # These keys should be absent from facts since data was empty
+        self.assertNotIn('ansible_net_hostname', result['ansible_facts'])
+        self.assertNotIn('ansible_net_version', result['ansible_facts'])
+        self.assertNotIn('ansible_net_model', result['ansible_facts'])
+
+    def test_interface_missing_name_key(self):
+        """Interface entries without 'name' key are skipped in parse_interfaces."""
+        modified_responses = copy.deepcopy(API_RESPONSES)
+        modified_responses[('interface',)] = [
+            {'.id': '*1', 'type': 'ether'},  # no 'name' key -> skipped
+            {'.id': '*2', 'name': 'good-ether', 'type': 'ether'},
+        ]
+        modified_responses[('ip', 'address')] = []
+        modified_responses[('ipv6', 'address')] = []
+        modified_responses[('ip', 'neighbor')] = []
+
+        def query_modified(_self, path):
+            response = modified_responses.get(tuple(path))
+            if response is None:
+                raise Exception('Unexpected command: %s' % repr(path))
+            return response
+
+        self.patch_query_path.stop()
+        self.patch_query_path = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.FactsBase.query_path',
+            query_modified)
+        self.patch_query_path.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['gather_subset'] = ['interfaces']
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # The nameless entry is skipped; only good-ether appears
+        self.assertIn('good-ether', result['ansible_facts']['ansible_net_interfaces'])
+        self.assertEqual(len(result['ansible_facts']['ansible_net_interfaces']), 1)
+
+    def test_parse_detail_missing_interface_key(self):
+        """Address entries without 'interface' key are skipped."""
+        modified_responses = copy.deepcopy(API_RESPONSES)
+        modified_responses[('ip', 'address')] = [
+            {'.id': '*1', 'address': '10.0.0.1/24'},  # no 'interface' key
+        ]
+        modified_responses[('ipv6', 'address')] = []
+
+        def query_modified(_self, path):
+            response = modified_responses.get(tuple(path))
+            if response is None:
+                raise Exception('Unexpected command: %s' % repr(path))
+            return response
+
+        self.patch_query_path.stop()
+        self.patch_query_path = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.FactsBase.query_path',
+            query_modified)
+        self.patch_query_path.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['gather_subset'] = ['interfaces']
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # No IPv4 addresses should be recorded since entry had no 'interface'
+        self.assertEqual(result['ansible_facts']['ansible_net_all_ipv4_addresses'], [])
+
+    def test_routing_parse_with_fallback_key(self):
+        """Routes without 'routing-mark' should use fallback 'main'."""
+        modified_responses = copy.deepcopy(API_RESPONSES)
+        modified_responses[('routing', 'bgp', 'peer')] = []
+        modified_responses[('routing', 'bgp', 'vpnv4-route')] = []
+        modified_responses[('routing', 'bgp', 'instance')] = []
+        modified_responses[('routing', 'ospf', 'instance')] = []
+        modified_responses[('routing', 'ospf', 'neighbor')] = []
+        modified_responses[('ip', 'route')] = [
+            {
+                '.id': '*1',
+                'dst-address': '0.0.0.0/0',
+                'gateway': '10.0.0.1',
+                # no 'routing-mark' key -> should use fallback 'main'
+            },
+            {
+                '.id': '*2',
+                'dst-address': '172.16.0.0/16',
+                'gateway': '10.0.0.2',
+                'routing-mark': 'vpn-table',
+            },
+        ]
+
+        def query_modified(_self, path):
+            response = modified_responses.get(tuple(path))
+            if response is None:
+                raise Exception('Unexpected command: %s' % repr(path))
+            return response
+
+        self.patch_query_path.stop()
+        self.patch_query_path = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.FactsBase.query_path',
+            query_modified)
+        self.patch_query_path.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['gather_subset'] = ['routing']
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        route = result['ansible_facts']['ansible_net_route']
+        self.assertIn('main', route)
+        self.assertIn('vpn-table', route)
+
+    def test_hardware_to_megabytes_none(self):
+        """Hardware facts with None values -> megabyte values should be None."""
+        modified_responses = copy.deepcopy(API_RESPONSES)
+        modified_responses[('system', 'resource')] = [
+            {
+                'uptime': '1d',
+                'version': '7.0',
+                'architecture-name': 'arm',
+                'cpu-load': 5,
+                # missing free-memory, total-memory, free-hdd-space, total-hdd-space
+            },
+        ]
+
+        def query_modified(_self, path):
+            response = modified_responses.get(tuple(path))
+            if response is None:
+                raise Exception('Unexpected command: %s' % repr(path))
+            return response
+
+        self.patch_query_path.stop()
+        self.patch_query_path = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.FactsBase.query_path',
+            query_modified)
+        self.patch_query_path.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['gather_subset'] = ['hardware']
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        self.assertIsNone(result['ansible_facts']['ansible_net_memfree_mb'])
+        self.assertIsNone(result['ansible_facts']['ansible_net_memtotal_mb'])
+
+    def test_query_path_error_returns_empty(self):
+        """LibRouterosError during query_path -> warn + return empty list."""
+        # Use the real query_path method by unpatching, then patch create_api
+        # to return an API that raises on certain paths
+        self.patch_query_path.stop()
+
+        class ErrorApi:
+            def path(self):
+                return self
+
+            def join(self, *parts):
+                return self
+
+            def __iter__(self):
+                raise FakeLibRouterosError('connection lost')
+
+        self.patch_create_api.stop()
+        self.patch_create_api = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_facts.create_api',
+            MagicMock(return_value=ErrorApi()))
+        self.patch_create_api.start()
+
+        with self.assertRaises(AnsibleExitJson) as exc:
+            module_args = self.config_module_args.copy()
+            module_args['gather_subset'] = ['hardware']
+            with set_module_args(module_args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # With all queries failing, hardware facts should be absent or None
+        self.assertNotIn('ansible_net_model', result['ansible_facts'])

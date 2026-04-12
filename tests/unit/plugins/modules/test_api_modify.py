@@ -2134,3 +2134,132 @@ class TestRouterosApiModifyModule(ModuleTestCase):
         self.assertEqual(result['changed'], False)
         self.assertEqual(result['old_data'], START_INTERFACE_GRE_OLD_DATA)
         self.assertEqual(result['new_data'], START_INTERFACE_GRE_OLD_DATA)
+
+    # --- Coverage improvement tests ---
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_modify.compose_api_path',
+           new=create_fake_path(('ip', 'settings'), START_IP_SETTINGS))
+    def test_sync_single_value_restrict_error(self):
+        """restrict option cannot be used with single_value path."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip settings',
+                'data': [
+                    {
+                        'ip-forward': True,
+                    },
+                ],
+                'restrict': [{'field': 'ip-forward', 'match_disabled': False}],
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('restrict', result['msg'])
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_modify.compose_api_path',
+           new=create_fake_path(('ip', 'settings'), START_IP_SETTINGS))
+    def test_sync_single_value_modify(self):
+        """Test single_value path modifies settings."""
+        with self.assertRaises(AnsibleExitJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip settings',
+                'data': [
+                    {
+                        'ip-forward': False,
+                    },
+                ],
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], True)
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_modify.compose_api_path',
+           new=create_fake_path(('ip', 'dns', 'static'), START_IP_DNS_STATIC))
+    def test_sync_list_handle_absent_remove_with_ignore_error(self):
+        """handle_absent_entries=remove with handle_entries_content=ignore is invalid for list paths."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'data': [
+                    {
+                        'name': 'router',
+                        'address': '192.168.88.1',
+                        'comment': 'defconf',
+                    },
+                ],
+                'handle_absent_entries': 'remove',
+                'handle_entries_content': 'ignore',
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('handle_absent_entries=remove', result['msg'])
+
+    def test_ensure_order_requires_remove(self):
+        """ensure_order=true requires handle_absent_entries=remove."""
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'data': [
+                    {
+                        'name': 'router',
+                        'address': '192.168.88.1',
+                    },
+                ],
+                'ensure_order': True,
+                'handle_absent_entries': 'ignore',
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('ensure_order', result['msg'])
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_modify.get_cached_or_detect')
+    def test_hardware_detect_unsupported_variant(self, mock_detect):
+        """Unknown hardware variant -> fail_json in api_modify main."""
+        mock_detect.return_value = 'unknown_variant'
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'interface ethernet switch',
+                'data': [{'name': 'x'}],
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('not supported for detected hardware variant', result['msg'])
+
+    def test_unsupported_api_version(self):
+        """API version not supported for versioned path -> fail_json."""
+        self.patch_get_api_version.stop()
+        self.patch_get_api_version = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_modify.get_api_version',
+            MagicMock(return_value='1.0'))
+        self.patch_get_api_version.start()
+
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'app settings',
+                'data': [{'name': 'x'}],
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('not supported for API version', result['msg'])

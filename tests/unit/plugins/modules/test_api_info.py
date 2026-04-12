@@ -13,6 +13,11 @@ from ansible_collections.community.routeros.tests.unit.plugins.modules.fake_api 
     FAKE_ROS_VERSION, FakeLibRouterosError, Key, fake_ros_api,
 )
 from ansible_collections.community.routeros.plugins.modules import api_info
+from ansible_collections.community.routeros.plugins.module_utils._api_data import (
+    APIData,
+    KeyInfo,
+    VersionedAPIData,
+)
 
 
 class TestRouterosApiInfoModule(ModuleTestCase):
@@ -981,3 +986,163 @@ class TestRouterosApiInfoModule(ModuleTestCase):
                 '.id': '*4',
             },
         ])
+
+    # --- Coverage improvement tests ---
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.compose_api_path')
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.get_cached_or_detect')
+    def test_hardware_detect_success(self, mock_detect, mock_compose_api_path):
+        """Hardware detect path resolves correctly to a variant."""
+        mock_detect.return_value = 'multi_entry_switch'
+        mock_compose_api_path.return_value = [
+            {
+                '.id': '*1',
+                'name': 'switch1',
+                'dynamic': False,
+            },
+        ]
+        with self.assertRaises(AnsibleExitJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'interface ethernet switch',
+                'handle_disabled': 'omit',
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        mock_detect.assert_called_once()
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.get_cached_or_detect')
+    def test_hardware_detect_unsupported_variant(self, mock_detect):
+        """Unknown hardware variant -> fail_json."""
+        mock_detect.return_value = 'unknown_variant'
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'interface ethernet switch',
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('not supported for detected hardware variant', result['msg'])
+        self.assertIn('unknown_variant', result['msg'])
+
+    def test_unsupported_api_version(self):
+        """API version not supported for versioned path -> fail_json."""
+        self.patch_get_api_version.stop()
+        self.patch_get_api_version = patch(
+            'ansible_collections.community.routeros.plugins.modules.api_info.get_api_version',
+            MagicMock(return_value='1.0'))
+        self.patch_get_api_version.start()
+
+        with self.assertRaises(AnsibleFailJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'app',
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['failed'], True)
+        self.assertIn('not supported for API version', result['msg'])
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.compose_api_path')
+    def test_write_only_field_removed(self, mock_compose_api_path):
+        """Write-only fields are removed from entries when handle_disabled != omit."""
+        mock_compose_api_path.return_value = [
+            {
+                '.id': '*1',
+                'name': 'admin',
+                'group': 'full',
+                'password': 'secret',
+                'dynamic': False,
+            },
+        ]
+        with self.assertRaises(AnsibleExitJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'user',
+                'handle_disabled': 'exclamation',
+                'hide_defaults': False,
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # password is write_only, should not appear in result
+        for entry in result['result']:
+            self.assertNotIn('password', entry)
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.compose_api_path')
+    def test_include_dynamic_true(self, mock_compose_api_path):
+        """Dynamic entries are included when include_dynamic=True."""
+        mock_compose_api_path.return_value = [
+            {
+                '.id': '*1',
+                'name': 'static-entry',
+                'address': '192.168.1.1',
+                'dynamic': False,
+            },
+            {
+                '.id': '*2',
+                'name': 'dynamic-entry',
+                'address': '10.0.0.1',
+                'dynamic': True,
+            },
+        ]
+        with self.assertRaises(AnsibleExitJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip dns static',
+                'handle_disabled': 'omit',
+                'include_dynamic': True,
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # Both entries should be present since include_dynamic=True
+        self.assertEqual(len(result['result']), 2)
+        names = [e.get('name') for e in result['result']]
+        self.assertIn('dynamic-entry', names)
+
+    @patch('ansible_collections.community.routeros.plugins.modules.api_info.compose_api_path')
+    def test_include_builtin_true(self, mock_compose_api_path):
+        """Builtin entries are included when include_builtin=True."""
+        mock_compose_api_path.return_value = [
+            {
+                '.id': '*1',
+                'chain': 'input',
+                'action': 'accept',
+                'dynamic': False,
+                'builtin': False,
+            },
+            {
+                '.id': '*2',
+                'chain': 'forward',
+                'action': 'drop',
+                'dynamic': False,
+                'builtin': True,
+            },
+        ]
+        with self.assertRaises(AnsibleExitJson) as exc:
+            args = self.config_module_args.copy()
+            args.update({
+                'path': 'ip firewall filter',
+                'handle_disabled': 'omit',
+                'include_builtin': True,
+            })
+            with set_module_args(args):
+                self.module.main()
+
+        result = exc.exception.args[0]
+        self.assertEqual(result['changed'], False)
+        # Both entries should be present since include_builtin=True
+        self.assertEqual(len(result['result']), 2)
