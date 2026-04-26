@@ -7,8 +7,8 @@ __metaclass__ = type
 
 import pytest
 
+import ansible_collections.community.routeros.plugins.module_utils._hardware_detect as hw_mod
 from ansible_collections.community.routeros.plugins.module_utils._hardware_detect import (
-    _cache_key,
     clear_cache,
     detect_switch_chip_type,
     get_cached_or_detect,
@@ -16,21 +16,12 @@ from ansible_collections.community.routeros.plugins.module_utils._hardware_detec
 
 
 class MockApiPath(object):
-    """Mock for the result of api.path(route) — an iterable of dicts."""
+    """Mock for the result of api.path(route) -- an iterable of dicts."""
     def __init__(self, entries):
         self._entries = entries
 
     def __iter__(self):
         return iter(self._entries)
-
-
-class MockApiPathRaises(object):
-    """Mock for api.path(route) that raises on iteration."""
-    def __init__(self, exc):
-        self._exc = exc
-
-    def __iter__(self):
-        raise self._exc
 
 
 class MockApi(object):
@@ -74,59 +65,28 @@ def _clear_detection_cache():
     clear_cache()
 
 
-def test_cache_key_returns_tuple():
-    api = MockApi()
-    result = _cache_key('switch_chip_type', api)
-    assert result == ('switch_chip_type', id(api))
-
-
-def test_get_cached_or_detect_calls_detector():
-    api = MockApi(switch_entries=[{'name': 'sw1'}, {'name': 'sw2'}])
-    result = get_cached_or_detect('switch_chip_type', api)
-    assert result == 'multi_entry_switch'
-
-
-def test_get_cached_or_detect_uses_cache():
+@pytest.fixture
+def counting_detector():
+    """Replace the registered switch_chip_type detector with a counter that
+    delegates to the real implementation. Yields a list whose only element
+    is the call count."""
     call_count = [0]
-    original_detect = detect_switch_chip_type
+    original = hw_mod.HARDWARE_DETECTORS['switch_chip_type']
 
-    def counting_detect(api):
+    def counting(api):
         call_count[0] += 1
-        return original_detect(api)
+        return detect_switch_chip_type(api)
 
-    import ansible_collections.community.routeros.plugins.module_utils._hardware_detect as hw_mod
-    old = hw_mod.HARDWARE_DETECTORS['switch_chip_type']
-    hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = counting_detect
+    hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = counting
     try:
-        api = MockApi(switch_entries=[{'name': 'sw1'}])
-        get_cached_or_detect('switch_chip_type', api)
-        get_cached_or_detect('switch_chip_type', api)
-        assert call_count[0] == 1
+        yield call_count
     finally:
-        hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = old
+        hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = original
 
 
-def test_clear_cache():
-    call_count = [0]
-    original_detect = detect_switch_chip_type
-
-    def counting_detect(api):
-        call_count[0] += 1
-        return original_detect(api)
-
-    import ansible_collections.community.routeros.plugins.module_utils._hardware_detect as hw_mod
-    old = hw_mod.HARDWARE_DETECTORS['switch_chip_type']
-    hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = counting_detect
-    try:
-        api = MockApi(switch_entries=[{'name': 'sw1'}])
-        get_cached_or_detect('switch_chip_type', api)
-        assert call_count[0] == 1
-        clear_cache()
-        get_cached_or_detect('switch_chip_type', api)
-        assert call_count[0] == 2
-    finally:
-        hw_mod.HARDWARE_DETECTORS['switch_chip_type'] = old
-
+# -----------------------------------------------------------------------------
+# detect_switch_chip_type
+# -----------------------------------------------------------------------------
 
 def test_detect_single_entry_no_name_field():
     """One switch entry + port-isolation entries without 'name' -> single_entry_switch."""
@@ -134,6 +94,13 @@ def test_detect_single_entry_no_name_field():
         switch_entries=[{'.id': '*1', 'name': 'switch1'}],
         pi_entries=[{'forwarding': 'enabled'}, {'forwarding': 'disabled'}],
     )
+    assert detect_switch_chip_type(api) == 'single_entry_switch'
+
+
+def test_detect_single_entry_empty_port_isolation():
+    """One switch entry + empty port-isolation -> single_entry_switch
+    (no entry exposes a 'name' field, so multi-entry is not implied)."""
+    api = MockApi(switch_entries=[{'.id': '*1', 'name': 'sw1'}], pi_entries=[])
     assert detect_switch_chip_type(api) == 'single_entry_switch'
 
 
@@ -154,7 +121,64 @@ def test_detect_multiple_entries():
     assert detect_switch_chip_type(api) == 'multi_entry_switch'
 
 
-def test_detect_exception_fallback():
+def test_detect_zero_entries():
+    """Empty switch list -> multi_entry_switch (safe modern default)."""
+    api = MockApi(switch_entries=[])
+    assert detect_switch_chip_type(api) == 'multi_entry_switch'
+
+
+def test_detect_port_isolation_raises_falls_back_to_multi():
+    """One switch entry but port-isolation query raises -> multi_entry_switch."""
+    api = MockApi(
+        switch_entries=[{'.id': '*1', 'name': 'sw1'}],
+        pi_raises=True,
+    )
+    assert detect_switch_chip_type(api) == 'multi_entry_switch'
+
+
+def test_detect_switch_query_raises_falls_back_to_multi():
     """API error on switch query -> safe default multi_entry_switch."""
     api = MockApi(raises_on_switch=True)
     assert detect_switch_chip_type(api) == 'multi_entry_switch'
+
+
+# -----------------------------------------------------------------------------
+# get_cached_or_detect / clear_cache
+# -----------------------------------------------------------------------------
+
+def test_get_cached_or_detect_returns_detector_value():
+    api = MockApi(switch_entries=[{'name': 'sw1'}, {'name': 'sw2'}])
+    assert get_cached_or_detect('switch_chip_type', api) == 'multi_entry_switch'
+
+
+def test_get_cached_or_detect_caches_per_api(counting_detector):
+    api = MockApi(switch_entries=[{'name': 'sw1'}])
+    first = get_cached_or_detect('switch_chip_type', api)
+    second = get_cached_or_detect('switch_chip_type', api)
+    assert counting_detector[0] == 1
+    assert first == second
+
+
+def test_get_cached_or_detect_distinct_apis_get_separate_entries(counting_detector):
+    """Cache keys include the api connection identity, so separate api
+    instances trigger separate detector calls."""
+    api1 = MockApi(switch_entries=[{'name': 'sw1'}])
+    api2 = MockApi(switch_entries=[{'name': 'sw1'}])
+    get_cached_or_detect('switch_chip_type', api1)
+    get_cached_or_detect('switch_chip_type', api2)
+    assert counting_detector[0] == 2
+
+
+def test_clear_cache_forces_redetection(counting_detector):
+    api = MockApi(switch_entries=[{'name': 'sw1'}])
+    get_cached_or_detect('switch_chip_type', api)
+    assert counting_detector[0] == 1
+    clear_cache()
+    get_cached_or_detect('switch_chip_type', api)
+    assert counting_detector[0] == 2
+
+
+def test_get_cached_or_detect_unknown_detector_raises():
+    api = MockApi()
+    with pytest.raises(KeyError):
+        get_cached_or_detect('does_not_exist', api)

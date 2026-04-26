@@ -8,12 +8,18 @@ __metaclass__ = type
 import re
 import pytest
 
-from ansible_collections.community.routeros.plugins.module_utils._api_data import PATHS
+from ansible_collections.community.routeros.plugins.module_utils._api_data import (
+    PATHS,
+    KeyInfo,
+    VersionedAPIData,
+)
 from ansible_collections.community.routeros.plugins.module_utils._api_helper import (
     value_to_str,
     _test_rule_except_invert,
     validate_and_prepare_restrict,
     restrict_entry_accepted,
+    apply_value_sanitizer,
+    restrict_argument_spec,
 )
 
 
@@ -77,50 +83,8 @@ VALUE_TO_STR_TESTS = [
 @pytest.mark.parametrize('value, kwargs, expected', VALUE_TO_STR_TESTS)
 def test_value_to_str(value, kwargs, expected):
     """Test value_to_str conversion."""
-    # Handle both positional and keyword argument styles
-    if isinstance(kwargs, dict) and len(kwargs) <= 2:
-        result = value_to_str(value, **kwargs)
-    else:
-        # Last element is expected, rest are kwargs
-        expected = kwargs
-        kwargs = {}
-        result = value_to_str(value)
-    assert result == expected, f"Expected {expected!r} for {value!r} with {kwargs}, got {result!r}"
-
-
-def test_value_to_str_simple_cases():
-    """Test simple value_to_str cases."""
-    assert value_to_str(None) is None
-    assert value_to_str(None, none_to_empty=True) == ''
-    assert value_to_str('') == ''
-    assert value_to_str('foo') == 'foo'
-
-
-def test_value_to_str_booleans():
-    """Test value_to_str boolean handling."""
-    assert value_to_str(True) == 'yes'
-    assert value_to_str(False) == 'no'
-    assert value_to_str(True, compat_bool=True) == 'true'
-    assert value_to_str(False, compat_bool=True) == 'false'
-    assert value_to_str(True, compat_bool=False) == 'yes'
-    assert value_to_str(False, compat_bool=False) == 'no'
-
-
-def test_value_to_str_numbers():
-    """Test value_to_str number handling."""
-    assert value_to_str(0) == '0'
-    assert value_to_str(1) == '1'
-    assert value_to_str(-42) == '-42'
-    assert value_to_str(3.14) == '3.14'
-    assert value_to_str(1.0) == '1.0'
-
-
-def test_value_to_str_collections():
-    """Test value_to_str collection handling."""
-    assert value_to_str([]) == '[]'
-    assert value_to_str({}) == '{}'
-    assert value_to_str(['a', 'b']) == "['a', 'b']"
-    assert value_to_str({'key': 'value'}) == "{'key': 'value'}"
+    result = value_to_str(value, **kwargs)
+    assert result == expected, "Expected {0!r} for {1!r} with {2}, got {3!r}".format(expected, value, kwargs, result)
 
 
 # -----------------------------------------------------------------------------
@@ -145,10 +109,13 @@ TEST_RULE_TESTS = [
     (1.10, {'field': 'foo', 'match_disabled': False, 'invert': False, 'regex': re.compile('^1\\.1$')}, False, True),
     # Integer 10 with regex ^1$: value_to_str(10)='10', no match, returns False
     (10, {'field': 'foo', 'match_disabled': False, 'invert': False, 'regex': re.compile('^1$')}, False, False),
-    # 'test' with invert=True, values=['test']: matches values, returns True (invert not handled here)
-    ('test', {'field': 'foo', 'match_disabled': False, 'invert': True, 'values': ['test']}, False, True),
-    # 'test' with invert=False, values=['test']: matches values, returns True
+    # String 'test' with values=['test']: matches, returns True. invert is
+    # NOT handled by _test_rule_except_invert (caller applies it), so this
+    # rule omits it.
     ('test', {'field': 'foo', 'match_disabled': False, 'invert': False, 'values': ['test']}, False, True),
+    # regex against value=None must short-circuit and return False (no match)
+    # regardless of regex content.
+    (None, {'field': 'foo', 'match_disabled': False, 'invert': False, 'regex': re.compile('.*')}, False, False),
 ]
 
 
@@ -471,3 +438,119 @@ def test_restrict_entry_accepted_with_invert_and_regex():
     entry = {'comment': 'foo-123'}
     result = restrict_entry_accepted(entry, TEST_PATH_DATA, restrict_data)
     assert result is False  # Matches regex, but inverted means reject
+
+
+def test_restrict_entry_accepted_none_returns_true():
+    """restrict_data=None means no filtering, accept everything."""
+    assert restrict_entry_accepted({'chain': 'input'}, TEST_PATH_DATA, None) is True
+
+
+def test_restrict_entry_accepted_falls_back_to_default():
+    """When the entry omits the field and the field has a default, the
+    default is matched against the rule values."""
+    path = VersionedAPIData(
+        fields={'mode': KeyInfo(default='auto')},
+    )
+    restrict_data = [{
+        'field': 'mode',
+        'match_disabled': False,
+        'invert': False,
+        'values': ['auto'],
+    }]
+    assert restrict_entry_accepted({}, path, restrict_data, compat=True) is True
+
+    restrict_data[0]['values'] = ['manual']
+    assert restrict_entry_accepted({}, path, restrict_data, compat=True) is False
+
+
+def test_restrict_entry_accepted_falls_back_to_absent_value():
+    """When the field is missing from the entry and absent_value is set,
+    absent_value is matched."""
+    path = VersionedAPIData(
+        fields={'note': KeyInfo(absent_value='ABSENT')},
+    )
+    restrict_data = [{
+        'field': 'note',
+        'match_disabled': False,
+        'invert': False,
+        'values': ['ABSENT'],
+    }]
+    assert restrict_entry_accepted({}, path, restrict_data, compat=True) is True
+    # Field present overrides absent_value
+    assert restrict_entry_accepted({'note': 'other'}, path, restrict_data, compat=True) is False
+
+
+def test_restrict_entry_accepted_compat_false_string_compare():
+    """With compat=False, integer entry values are stringified before
+    matching against string values."""
+    path = VersionedAPIData(
+        fields={'count': KeyInfo()},
+    )
+    restrict_data = [{
+        'field': 'count',
+        'match_disabled': False,
+        'invert': False,
+        'values': ['5'],
+    }]
+    assert restrict_entry_accepted({'count': 5}, path, restrict_data, compat=False) is True
+    # In compat=True, raw int 5 is checked against ['5'] -> no match
+    assert restrict_entry_accepted({'count': 5}, path, restrict_data, compat=True) is False
+
+
+# -----------------------------------------------------------------------------
+# apply_value_sanitizer tests
+# -----------------------------------------------------------------------------
+
+def test_apply_value_sanitizer_no_sanitizer_returns_value_unchanged():
+    ki = KeyInfo()
+    assert apply_value_sanitizer(ki, 'foo', 'name') == 'foo'
+    assert apply_value_sanitizer(ki, None, 'name') is None
+
+
+def test_apply_value_sanitizer_applies_sanitizer():
+    ki = KeyInfo(value_sanitizer=lambda v: '/' + v if isinstance(v, str) and not v.startswith('/') else v)
+    assert apply_value_sanitizer(ki, 'foo', 'src') == '/foo'
+    assert apply_value_sanitizer(ki, '/already', 'src') == '/already'
+
+
+def test_apply_value_sanitizer_warns_on_change():
+    warnings = []
+    ki = KeyInfo(value_sanitizer=lambda v: v.upper() if isinstance(v, str) else v)
+    result = apply_value_sanitizer(ki, 'foo', 'name', warn=warnings.append)
+    assert result == 'FOO'
+    assert len(warnings) == 1
+    assert 'name' in warnings[0]
+    assert "'foo'" in warnings[0]
+    assert "'FOO'" in warnings[0]
+
+
+def test_apply_value_sanitizer_no_warn_when_unchanged():
+    warnings = []
+    ki = KeyInfo(value_sanitizer=lambda v: v)
+    result = apply_value_sanitizer(ki, 'foo', 'name', warn=warnings.append)
+    assert result == 'foo'
+    assert warnings == []
+
+
+def test_apply_value_sanitizer_warn_none_is_silent():
+    """warn=None must not raise even when the value changes."""
+    ki = KeyInfo(value_sanitizer=lambda v: v.upper() if isinstance(v, str) else v)
+    assert apply_value_sanitizer(ki, 'foo', 'name', warn=None) == 'FOO'
+
+
+# -----------------------------------------------------------------------------
+# restrict_argument_spec tests
+# -----------------------------------------------------------------------------
+
+def test_restrict_argument_spec_shape():
+    spec = restrict_argument_spec()
+    assert 'restrict' in spec
+    restrict = spec['restrict']
+    assert restrict['type'] == 'list'
+    assert restrict['elements'] == 'dict'
+    options = restrict['options']
+    assert set(options.keys()) == {'field', 'match_disabled', 'values', 'regex', 'invert'}
+    assert options['field']['required'] is True
+    assert options['match_disabled']['default'] is False
+    assert options['invert']['default'] is False
+    assert options['values']['type'] == 'list'

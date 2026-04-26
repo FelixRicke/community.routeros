@@ -6,13 +6,14 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import pytest
-import sys
 
 from ansible_collections.community.routeros.plugins.module_utils._api_data import (
     APIData,
     VersionedAPIData,
     KeyInfo,
+    Depr,
     _compare,
+    _sanitize_ensure_leading_slash,
     split_path,
     join_path,
     PATHS,
@@ -369,10 +370,73 @@ def test_versioned_apidata_versioned_fields_conditions_format():
         VersionedAPIData(
             fields={'name': KeyInfo()},
             versioned_fields=[
-                ('7.0', '>=', KeyInfo()),  # Should be [(version, op), ...]
+                ('not_a_list', 'new_field', KeyInfo()),
             ],
         )
-    # This may pass or fail depending on implementation - adjust as needed
+    assert 'conditions must be a list or tuple' in str(exc.value.args[0])
+
+
+def test_versioned_apidata_versioned_fields_field_not_keyinfo():
+    """versioned_fields entries must contain a KeyInfo as field."""
+    with pytest.raises(ValueError) as exc:
+        VersionedAPIData(
+            fields={'name': KeyInfo()},
+            versioned_fields=[
+                ([('7.0', '>=')], 'new_field', 'not_a_keyinfo'),
+            ],
+        )
+    assert 'field must be a KeyInfo object' in str(exc.value.args[0])
+
+
+def test_versioned_apidata_versioned_fields_name_collision():
+    """A field name appearing both in fields and versioned_fields raises."""
+    with pytest.raises(ValueError) as exc:
+        VersionedAPIData(
+            fields={'name': KeyInfo()},
+            versioned_fields=[
+                ([('7.0', '>=')], 'name', KeyInfo()),
+            ],
+        )
+    assert 'appears both in fields and versioned_fields' in str(exc.value.args[0])
+
+
+def test_versioned_apidata_needs_version_flag():
+    """needs_version is True when versioned_fields is non-empty."""
+    plain = VersionedAPIData(fields={'name': KeyInfo()})
+    assert plain.needs_version is False
+
+    with_versioned = VersionedAPIData(
+        fields={'name': KeyInfo()},
+        versioned_fields=[([('7.0', '>=')], 'extra', KeyInfo())],
+    )
+    assert with_versioned.needs_version is True
+
+
+def test_versioned_apidata_happy_paths():
+    """Smoke-test that valid combinations construct without error."""
+    # single_value
+    sv = VersionedAPIData(single_value=True, fields={'name': KeyInfo()})
+    assert sv.single_value is True
+    # unknown_mechanism
+    um = VersionedAPIData(unknown_mechanism=True, fields={'name': KeyInfo()})
+    assert um.unknown_mechanism is True
+    # stratify_keys
+    sk = VersionedAPIData(stratify_keys=['name'], fields={'name': KeyInfo()})
+    assert sk.stratify_keys == ['name']
+    # fixed_entries with primary_keys
+    fe = VersionedAPIData(
+        primary_keys=['name'], fixed_entries=True,
+        fields={'name': KeyInfo()},
+    )
+    assert fe.fixed_entries is True
+    # required_one_of + mutually_exclusive
+    cm = VersionedAPIData(
+        fields={'a': KeyInfo(), 'b': KeyInfo()},
+        required_one_of=[['a', 'b']],
+        mutually_exclusive=[['a', 'b']],
+    )
+    assert cm.required_one_of == [['a', 'b']]
+    assert cm.mutually_exclusive == [['a', 'b']]
 
 
 # -----------------------------------------------------------------------------
@@ -586,27 +650,6 @@ def test_apidata_hardware_variants_basic():
     assert apidata.fully_understood is True
 
 
-def test_apidata_hardware_variants_basic():
-    """Test basic hardware_variants functionality."""
-    apidata = APIData(
-        hardware_detect='chip_type',
-        hardware_variants={
-            'chip_a': APIData(unversioned=VersionedAPIData(
-                fully_understood=True,
-                fields={'name': KeyInfo(), 'chip_field': KeyInfo(default='A')},
-            )),
-            'chip_b': APIData(unversioned=VersionedAPIData(
-                fully_understood=True,
-                fields={'name': KeyInfo(), 'chip_field': KeyInfo(default='B')},
-            )),
-        }
-    )
-    assert apidata.hardware_detect == 'chip_type'
-    assert 'chip_a' in apidata.hardware_variants
-    assert 'chip_b' in apidata.hardware_variants
-    assert apidata.fully_understood is True
-
-
 def test_apidata_neither_unversioned_nor_versioned():
     """Test error when neither unversioned nor versioned is provided."""
     with pytest.raises(ValueError) as exc:
@@ -633,34 +676,159 @@ def test_apidata_provide_version_all_versions(version):
 # Integration tests with PATHS
 # -----------------------------------------------------------------------------
 
-def test_paths_is_dict():
-    """Test that PATHS is a dictionary."""
+def test_paths_structure():
+    """PATHS is a dict mapping tuple keys to APIData instances."""
     assert isinstance(PATHS, dict)
-
-
-def test_paths_keys_are_tuples():
-    """Test that PATHS keys are tuples."""
-    for key in PATHS.keys():
-        assert isinstance(key, tuple)
-
-
-def test_paths_values_are_apidata():
-    """Test that PATHS values are APIData instances."""
+    assert len(PATHS) > 0
     for key, value in PATHS.items():
-        assert isinstance(value, APIData), f"PATHS[{key}] is not an APIData instance"
+        assert isinstance(key, tuple), 'PATHS key {key!r} is not a tuple'.format(key=key)
+        assert isinstance(value, APIData), 'PATHS[{key!r}] is not APIData'.format(key=key)
 
 
 def test_provide_version_on_real_paths():
-    """Test provide_version on actual PATHS entries."""
-    # Test a few real paths
+    """provide_version returns usable data for known PATHS entries."""
     test_paths = [
         ('ip', 'address'),
         ('interface', 'bridge'),
     ]
-
+    seen = 0
     for path in test_paths:
-        if path in PATHS:
-            apidata = PATHS[path]
-            fully_understood, error = apidata.provide_version('7.5')
-            # Should not raise, may return False for fully_understood
-            assert error is None or fully_understood is False
+        if path not in PATHS:
+            continue
+        seen += 1
+        apidata = PATHS[path]
+        fully_understood, error = apidata.provide_version('7.5')
+        # error is the deprecated/removed-in-version message string when the
+        # path resolves to a string fallback; in that case fully_understood
+        # is False. Otherwise, get_data() must yield a usable VersionedAPIData.
+        if error is None and fully_understood:
+            data = apidata.get_data()
+            assert isinstance(data, VersionedAPIData)
+            assert isinstance(data.fields, dict)
+    assert seen > 0, 'expected at least one of the test paths to exist in PATHS'
+
+
+# -----------------------------------------------------------------------------
+# Depr tests
+# -----------------------------------------------------------------------------
+
+def test_depr_default_context():
+    d = Depr(version='3.0.0', msg='use foo instead')
+    assert d.context == 'all'
+    assert d.applies('read') is True
+    assert d.applies('write') is True
+    assert d.applies('all') is True
+
+
+@pytest.mark.parametrize('context', ['read', 'write', 'all'])
+def test_depr_valid_context(context):
+    d = Depr(version='3.0.0', msg='x', context=context)
+    assert d.context == context
+    assert d.applies(context) is True
+
+
+def test_depr_applies_scoped_context():
+    d = Depr(version='3.0.0', msg='x', context='read')
+    assert d.applies('read') is True
+    assert d.applies('write') is False
+    # 'all' check: applies returns True only when stored context matches
+    # query, or stored context is 'all'. d.context='read' with query 'all'
+    # is False per current implementation.
+    assert d.applies('all') is False
+
+
+def test_depr_invalid_context():
+    with pytest.raises(ValueError) as exc:
+        Depr(version='3.0.0', msg='x', context='somewhere')
+    assert 'context must be all, read, or write' in str(exc.value.args[0])
+
+
+def test_depr_emit_calls_module_deprecate():
+    calls = []
+
+    class FakeModule(object):
+        def deprecate(self, msg, **kwargs):
+            calls.append((msg, kwargs))
+
+    d = Depr(version='3.0.0', msg='gone soon')
+    d.emit(FakeModule())
+    assert len(calls) == 1
+    assert calls[0][0] == 'gone soon'
+    assert calls[0][1].get('version') == '3.0.0'
+    assert calls[0][1].get('collection_name') == 'community.routeros'
+
+
+# -----------------------------------------------------------------------------
+# KeyInfo with Depr
+# -----------------------------------------------------------------------------
+
+def test_keyinfo_depr_must_be_depr_instance():
+    with pytest.raises(ValueError) as exc:
+        KeyInfo(depr='not a Depr')
+    assert 'depr must be a Depr instance' in str(exc.value.args[0])
+
+
+def test_keyinfo_depr_stored():
+    d = Depr(version='3.0.0', msg='x')
+    ki = KeyInfo(depr=d)
+    assert ki.depr is d
+
+
+# -----------------------------------------------------------------------------
+# _sanitize_ensure_leading_slash
+# -----------------------------------------------------------------------------
+
+@pytest.mark.parametrize('value, expected', [
+    ('foo', '/foo'),
+    ('foo/bar', '/foo/bar'),
+    ('/foo', '/foo'),
+    ('/', '/'),
+    ('', ''),
+    (None, None),
+    (0, 0),
+    (False, False),
+    (['x'], ['x']),
+])
+def test_sanitize_ensure_leading_slash(value, expected):
+    assert _sanitize_ensure_leading_slash(value) == expected
+
+
+def test_sanitize_ensure_leading_slash_idempotent():
+    once = _sanitize_ensure_leading_slash('foo')
+    twice = _sanitize_ensure_leading_slash(once)
+    assert once == twice == '/foo'
+
+
+# -----------------------------------------------------------------------------
+# APIData provide_version with string fallback in versioned tuples
+# -----------------------------------------------------------------------------
+
+def test_apidata_versioned_string_fallback():
+    """A versioned entry whose data is a plain string is treated as a
+    deprecation/error message: provide_version returns (False, msg)."""
+    apidata = APIData(versioned=[
+        ('7.0', '>=', VersionedAPIData(
+            fully_understood=True,
+            fields={'name': KeyInfo()},
+        )),
+        ('*', '*', 'this path was removed'),
+    ])
+    fully_understood, error = apidata.provide_version('6.0')
+    assert fully_understood is False
+    assert error == 'this path was removed'
+
+
+def test_apidata_versioned_no_match_no_fallback():
+    """When no versioned entry matches and there is no '*', '*' fallback,
+    provide_version returns (False, None) and get_data() raises."""
+    apidata = APIData(versioned=[
+        ('7.0', '>=', VersionedAPIData(
+            fully_understood=True,
+            fields={'name': KeyInfo()},
+        )),
+    ])
+    fully_understood, error = apidata.provide_version('6.0')
+    assert fully_understood is False
+    assert error is None
+    with pytest.raises(ValueError):
+        apidata.get_data()
