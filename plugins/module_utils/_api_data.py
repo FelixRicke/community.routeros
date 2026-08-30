@@ -8466,9 +8466,10 @@ PATHS = {
                 ([('7.16', '>=')], 'max-sessions', KeyInfo(default=20)),
                 ([('7.15', '>=')], 'numbers', KeyInfo()),
                 ([('7.15', '>=')], 'vrf', KeyInfo()),
+                ([('7.24', '<')], 'address', KeyInfo()),
+                ([('7.24', '>=')], 'available-from', KeyInfo()),
             ],
             fields={
-                'address': KeyInfo(),
                 'certificate': KeyInfo(),
                 'disabled': KeyInfo(default=False),
                 'name': KeyInfo(),
