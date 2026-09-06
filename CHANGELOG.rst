@@ -4,6 +4,22 @@ Community RouterOS Release Notes
 
 .. contents:: Topics
 
+v3.22.0
+=======
+
+Release Summary
+---------------
+
+Feature release.
+
+Minor Changes
+-------------
+
+- api_info, api_modify - adds support for multiple ``restart-*`` and ``stop-on-unhealthy`` parameters in the ``container`` path for RouterOS >= 7.23 (https://github.com/ansible-collections/community.routeros/pull/474).
+- api_info, api_modify - adds support for the ``privileged`` parameter in the ``container`` path for RouterOS >= 7.24 (https://github.com/ansible-collections/community.routeros/pull/474).
+- api_info, api_modify - removed support for the ``auto-restart-interval`` parameter in the ``container`` path for RouterOS >= 7.23 (https://github.com/ansible-collections/community.routeros/pull/474).
+- api_info, api_modify - the ``address`` parameter in the ``ip service`` path was renamed to ``available-from`` for RouterOS >= 7.24. The old name is still supported for RouterOS < 7.24 (https://github.com/ansible-collections/community.routeros/pull/475).
+
 v3.21.0
 =======
 

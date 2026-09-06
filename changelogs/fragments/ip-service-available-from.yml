@@ -1,3 +1,0 @@
-minor_changes:
-  - api_info, api_modify - the ``address`` parameter in the ``ip service`` path was renamed to ``available-from`` for RouterOS >= 7.24. The old name is still supported for RouterOS < 7.24
-    (https://github.com/ansible-collections/community.routeros/pull/475).

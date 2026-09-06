@@ -2477,3 +2477,21 @@ releases:
       - routeros-7.23-bridge-dhcp-snooping-options.yml
       - routeros-7.23-ipv6-address-from-pool-policy.yml
     release_date: '2026-06-14'
+  3.22.0:
+    changes:
+      minor_changes:
+        - api_info, api_modify - adds support for multiple ``restart-*`` and ``stop-on-unhealthy``
+          parameters in the ``container`` path for RouterOS >= 7.23 (https://github.com/ansible-collections/community.routeros/pull/474).
+        - api_info, api_modify - adds support for the ``privileged`` parameter in
+          the ``container`` path for RouterOS >= 7.24 (https://github.com/ansible-collections/community.routeros/pull/474).
+        - api_info, api_modify - removed support for the ``auto-restart-interval``
+          parameter in the ``container`` path for RouterOS >= 7.23 (https://github.com/ansible-collections/community.routeros/pull/474).
+        - api_info, api_modify - the ``address`` parameter in the ``ip service`` path
+          was renamed to ``available-from`` for RouterOS >= 7.24. The old name is
+          still supported for RouterOS < 7.24 (https://github.com/ansible-collections/community.routeros/pull/475).
+      release_summary: Feature release.
+    fragments:
+      - 3.22.0.yml
+      - 474-routeros-container-changes.yml
+      - ip-service-available-from.yml
+    release_date: '2026-09-06'
